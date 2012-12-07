@@ -12,11 +12,11 @@ class InventoryItem(Entity):
     committed = None
     backorders = None
 
-    def __init__(self, sku, on_hand):
+    def __init__(self, sku, on_hand, committed=None, backorders=None):
         self.sku = sku
         self.on_hand = on_hand
-        self.committed = []
-        self.backorders = []
+        self.committed = committed if committed else []
+        self.backorders = backorders if backorders else []
 
     def commit(self, quantity, order_id):
         committed_quantity = min(self.on_hand, quantity)

@@ -1,30 +1,11 @@
 import datetime
 
 from unittest import TestCase, skip
-from mock import MagicMock
 
 from domain.model.inventory.inventory_items import *
-from domain.model.inventory.inventory_repository import *
 
 
 class InventoryTestCase(TestCase):
-
-#    def setUp(self):
-#        self.repository = InventoryRepository()
-
-#        self.repository.find_by_sku = MagicMock()
-#        self.repository.find_by_sku.return_value = InventoryItem(sku="PROD000")
-
-#        self.repository.find_backorders_by_sku = MagicMock()
-#        self.repository.find_backorders_by_sku.return_value = [
-#            BackOrderedItem(sku="PROD000", date = datetime.datetime.now(), quantity=1, order_id="ORD000"),
-#            BackOrderedItem(sku="PROD000", date = datetime.datetime.now(), quantity=2, order_id="ORD001"),
-#        ]
-
-#    def test_initialise_with_zero_on_hand(self):
-#        item = self.repository.find_by_sku("PROD000")
-#        assert item.on_hand == 0
-
 
     def test_commit_lt_on_hand(self):
         item = InventoryItem("PROD000", 2)
@@ -148,6 +129,18 @@ class InventoryTestCase(TestCase):
         committed_items = item.find_committed("ORD001")
         self.assertEqual(0, len(committed_items), "Item commitment was not fulfilled")
         self.assertEquals(0, item.total_committed(), "There should be no more remaining commitments")
+
+    def test_cannot_fulfill_commitment(self):
+        item = InventoryItem("PROD000", 1)
+        item.commit(2, "ORD000")
+
+        committed_items = item.find_committed("ORD000")
+        self.assertEqual(1, len(committed_items), "Items were not committed")
+
+        item.fulfill_commitment(3, "ORD000")
+
+        committed_items = item.find_committed("ORD000")
+        self.assertEqual(1, len(committed_items), "Items should not have been fulfilled")
 
     def test_oldest_commitment_fulfilled_first(self):
         item = InventoryItem("PROD000", 4)

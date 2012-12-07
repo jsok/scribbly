@@ -1,12 +1,13 @@
 Scribbly ERP
 ------------
 
-Checkout main repo from:
-<placeholder>
-
 Create virtualenv:
-> virtualenv virtualenv
-> source virtualenv/bin/activate
+```
+# virtualenv virtualenv
+# source virtualenv/bin/activate
+```
 
+```
 Install requirements:
-> pip install --requirement=requirements.txt
+# pip install --requirement=requirements.txt
+```

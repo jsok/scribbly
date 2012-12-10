@@ -163,3 +163,60 @@ class InventoryTestCase(TestCase):
         self.assertEqual(1, len(committed_items), "Item commitment was not fulfilled")
         self.assertEquals(1, item.total_committed(), "Only one item should have been committed")
         self.assertEqual(committed_items[0].date, second.date, "Oldest item was not fulfilled first")
+
+    def test_enter_stock_increases_on_hand(self):
+        item = InventoryItemFactory.build(on_hand=0)
+        self.assertEquals(0, item.on_hand, "On hand count was not initialised to zero")
+        item.enter_stock(1)
+        self.assertEquals(1, item.on_hand, "On hand count did not increase")
+
+    def test_remove_stock(self):
+        item = InventoryItemFactory.build(on_hand=1)
+        item.remove_stock(1)
+        self.assertEquals(0, item.on_hand, "On hand count was not decreased")
+
+    def test_remove_stock_gt_on_hand(self):
+        item = InventoryItemFactory.build(on_hand=1)
+        item.remove_stock(2)
+        self.assertEquals(1, item.on_hand, "On hand count should not have decreased")
+
+    def test_remove_stock_with_existing_backorder(self):
+        existing_backorder = BackorderFactory.build(sku="PROD000", quantity=1, order_id="ORD000")
+        commitment = CommitmentFactory.build(sku="PROD000", quantity=1, order_id="ORD000")
+        item = InventoryItemFactory.build(on_hand=0, sku="PROD000",
+            backorders=[existing_backorder], committed=[commitment])
+
+        item.remove_stock(1)
+
+        committed_items = item.find_committed("ORD000")
+        backordered_items = item.find_backorders("ORD000")
+
+        self.assertEqual(0, item.total_committed(), "Item commitment was not removed")
+        self.assertEqual(2, len(backordered_items), "Stock removal did not create backorder")
+        self.assertEquals(2, item.total_backorders(), "Wrong backorder quantity set")
+
+    def test_remove_stock_propagates_committed_to_backorder(self):
+        commitment = CommitmentFactory.build(sku="PROD000", quantity=1, order_id="ORD000")
+        item = InventoryItemFactory.build(on_hand=0, sku="PROD000", committed=[commitment])
+
+        item.remove_stock(1)
+
+        committed_items = item.find_committed("ORD000")
+        backordered_items = item.find_backorders("ORD000")
+
+        self.assertEqual(0, len(committed_items), "Item commitment was not removed")
+        self.assertEqual(1, len(backordered_items), "Commitment was not converted to backorder")
+        self.assertEquals(1, item.total_backorders(), "Wrong backorder quantity set")
+
+    def test_remove_stock_propagates_multiple_partial_committed_to_backorder(self):
+        commitment1 = CommitmentFactory.build(sku="PROD000", quantity=1, order_id="ORD000")
+        commitment2 = CommitmentFactory.build(sku="PROD000", quantity=3, order_id="ORD001")
+        item = InventoryItemFactory.build(on_hand=0, sku="PROD000",
+            committed=[commitment1, commitment2])
+
+        item.remove_stock(2)
+
+        self.assertEqual(2, item.total_committed(), "Item commitment was not removed")
+        self.assertEqual(1, len(item.find_backorders("ORD000")), "Commitment was not converted to backorder")
+        self.assertEqual(1, len(item.find_backorders("ORD001")), "Commitment was not converted to backorder")
+        self.assertEquals(2, item.total_backorders(), "Wrong backorder quantity set")

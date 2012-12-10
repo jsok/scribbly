@@ -61,3 +61,27 @@ class InventoryItem(Entity):
             else:
                 quantity -= commitment.quantity
                 self.committed.remove(commitment)
+
+    def enter_stock(self, quantity):
+        self.on_hand += quantity
+
+    def remove_stock(self, quantity):
+        # Simply reduce on hand count
+        if quantity <= self.on_hand:
+            self.on_hand -= quantity
+
+        # otherwise we need to convert committed items to backorders
+        else:
+            commitments = sorted(self.committed, key=lambda c: c.date, reverse=True)
+
+            for commitment in commitments:
+                if quantity < commitment.quantity:
+                    commitment.quantity -= quantity
+                    backorder = BackOrderedItem(self.sku, datetime.datetime.now(), quantity, commitment.order_id)
+                    self.backorders.append(backorder)
+                    break
+                else:
+                    quantity -= commitment.quantity
+                    backorder = BackOrderedItem(self.sku, datetime.datetime.now(), commitment.quantity, commitment.order_id)
+                    self.backorders.append(backorder)
+                    self.committed.remove(commitment)

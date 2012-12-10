@@ -57,6 +57,7 @@ class InventoryItem(Entity):
         for commitment in commitments:
             if quantity < commitment.quantity:
                 commitment.quantity -= quantity
+                break
             else:
                 quantity -= commitment.quantity
                 self.committed.remove(commitment)

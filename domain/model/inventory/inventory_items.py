@@ -11,6 +11,7 @@ class InventoryItem(Entity):
     on_hand = None
     committed = None
     backorders = None
+    purchase_orders = None
 
     def __init__(self, sku, on_hand, committed=None, backorders=None):
         self.sku = sku

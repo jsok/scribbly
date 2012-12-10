@@ -2,7 +2,7 @@ import datetime
 
 from unittest import TestCase, skip
 
-from factories.inventory import InventoryItemFactory, BackorderFactory
+from factories.inventory import InventoryItemFactory, BackorderFactory, CommitmentFactory
 from domain.model.inventory.inventory_items import *
 
 

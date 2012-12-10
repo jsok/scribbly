@@ -12,6 +12,13 @@ class BackorderFactory(factory.Factory):
     quantity = 1
     order_id = factory.Sequence(lambda n: 'ORD%03d'% n, type=int)
 
+class CommitmentFactory(factory.Factory):
+    FACTORY_FOR = committed_item.CommittedItem
+
+    sku = factory.Sequence(lambda n: 'PROD%03d'% n, type=int)
+    date = datetime.datetime.now()
+    quantity = 1
+    order_id = factory.Sequence(lambda n: 'ORD%03d'% n, type=int)
 
 class InventoryItemFactory(factory.Factory):
     FACTORY_FOR = inventory_items.InventoryItem

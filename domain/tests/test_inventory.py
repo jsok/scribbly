@@ -2,7 +2,7 @@ import datetime
 
 from unittest import TestCase, skip
 
-from factories.inventory import InventoryItemFactory, BackorderFactory, CommitmentFactory
+from factories.inventory import InventoryItemFactory, BackorderFactory, CommitmentFactory, PurchaseOrderFactory
 from domain.model.inventory.inventory_items import *
 
 
@@ -220,3 +220,32 @@ class InventoryTestCase(TestCase):
         self.assertEqual(1, len(item.find_backorders("ORD000")), "Commitment was not converted to backorder")
         self.assertEqual(1, len(item.find_backorders("ORD001")), "Commitment was not converted to backorder")
         self.assertEquals(2, item.total_backorders(), "Wrong backorder quantity set")
+
+    def test_add_purchase_order(self):
+        item = InventoryItemFactory.build(sku="PROD000", on_hand=1)
+
+        po = PurchaseOrderFactory.build(sku="PROD000", quantity=1, purchase_order_id="PO000")
+        item.add_purchase_order(po)
+
+        self.assertEquals(1, len(item.purchase_orders), "PO was not added")
+        self.assertEqual(po, item.find_purchase_order("PO000"), "Could not find purchase order")
+
+    def test_fulfill_purchase_order(self):
+        po = PurchaseOrderFactory.build(sku="PROD000", quantity=1, purchase_order_id="PO000")
+        item = InventoryItemFactory.build(sku="PROD000", on_hand=0, purchase_orders=[po])
+
+        item.fulfill_purchase_order("PO000")
+
+        self.assertEquals(1, item.on_hand, "On hand quantity was not increased")
+        self.assertIsNone(item.find_purchase_order("PO000"), "Purchase order was not removed after fulfillment")
+
+    def test_fulfill_purchase_order_partially(self):
+        po = PurchaseOrderFactory.build(sku="PROD000", quantity=2, purchase_order_id="PO000")
+        item = InventoryItemFactory.build(sku="PROD000", on_hand=0, purchase_orders=[po])
+
+        item.fulfill_purchase_order("PO000", quantity=1)
+        po = item.find_purchase_order("PO000")
+
+        self.assertEquals(1, item.on_hand, "On hand quantity was not increased")
+        self.assertIsNotNone(po, "Purchase order was unable to be found")
+        self.assertEquals(1, po.quantity, "Purchase order quantity was not modified")

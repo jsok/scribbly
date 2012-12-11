@@ -11,3 +11,10 @@ class PurchaseOrderedItem(Entity):
     quantity = None
     purchase_order_id = None
     eta_date = None
+
+    def __init__(self, sku, date, quantity, purchase_order_id, eta_date=None):
+        self.sku = sku
+        self.date = date
+        self.quantity = quantity
+        self.purchase_order_id = purchase_order_id
+        self.eta_date = eta_date if eta_date else None

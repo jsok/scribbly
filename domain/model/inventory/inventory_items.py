@@ -13,11 +13,12 @@ class InventoryItem(Entity):
     backorders = None
     purchase_orders = None
 
-    def __init__(self, sku, on_hand, committed=None, backorders=None):
+    def __init__(self, sku, on_hand, committed=None, backorders=None, purchase_orders=None):
         self.sku = sku
         self.on_hand = on_hand
         self.committed = committed if committed else []
         self.backorders = backorders if backorders else []
+        self.purchase_orders = purchase_orders if purchase_orders else []
 
     def commit(self, quantity, order_id):
         committed_quantity = min(self.on_hand, quantity)
@@ -83,6 +84,27 @@ class InventoryItem(Entity):
                     break
                 else:
                     quantity -= commitment.quantity
-                    backorder = BackOrderedItem(self.sku, datetime.datetime.now(), commitment.quantity, commitment.order_id)
+                    backorder = BackOrderedItem(self.sku, datetime.datetime.now(), commitment.quantity,
+                        commitment.order_id)
                     self.backorders.append(backorder)
                     self.committed.remove(commitment)
+
+    def find_purchase_order(self, purchase_order_id):
+        po = [po for po in self.purchase_orders if po.purchase_order_id == purchase_order_id]
+        return po[0] if po else None
+
+    def add_purchase_order(self, po):
+        self.purchase_orders.append(po)
+
+    def fulfill_purchase_order(self, purchase_order_id, quantity=None):
+        po = self.find_purchase_order(purchase_order_id)
+        if po is None:
+            return
+
+        if quantity in [None, po.quantity]:
+            quantity = po.quantity
+            self.purchase_orders.remove(po)
+        else:
+            po.quantity -= quantity
+
+        self.on_hand += quantity

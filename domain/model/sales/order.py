@@ -29,7 +29,6 @@ class Order(Entity):
         """
         Order specific line item.
         """
-
         product_id = None
         quantity = None
         price = None
@@ -42,4 +41,4 @@ class Order(Entity):
             self.discount = discount
 
         def amount(self):
-            return (self.price * (1.0 - self.discount)) * self.quantity
+            return max(0, (self.price * (1.0 - self.discount)) * self.quantity)

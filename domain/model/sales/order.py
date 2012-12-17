@@ -1,3 +1,5 @@
+import operator
+
 from domain.shared.entity import Entity
 
 class Order(Entity):
@@ -16,3 +18,28 @@ class Order(Entity):
 
     def is_acknowledged(self):
         return self.acknowledgement_date != None
+
+    def total_amount(self):
+        return reduce(operator.add, [i.amount() for i in self.line_items], 0.00)
+
+    def add_line_item(self, product_id, quantity, price, discount):
+        self.line_items.append(self.LineItem(product_id, quantity, price, discount))
+
+    class LineItem():
+        """
+        Order specific line item.
+        """
+
+        product_id = None
+        quantity = None
+        price = None
+        discount = None
+
+        def __init__(self, product_id, quantity, price, discount):
+            self.product_id = product_id
+            self.quantity = quantity
+            self.price = price
+            self.discount = discount
+
+        def amount(self):
+            return (self.price * (1.0 - self.discount)) * self.quantity

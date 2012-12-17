@@ -3,8 +3,6 @@ import datetime
 from unittest import TestCase, skip
 
 from factories.inventory import InventoryItemFactory, BackorderFactory, CommitmentFactory, PurchaseOrderFactory
-from domain.model.inventory.inventory_items import *
-
 
 class InventoryTestCase(TestCase):
 

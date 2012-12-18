@@ -1,6 +1,6 @@
 from unittest import TestCase, skip
 
-from factories.sales import OrderFactory
+from factories.sales import OrderFactory, PackingListFactory
 
 class SalesOrderTestCase(TestCase):
 
@@ -31,3 +31,30 @@ class SalesOrderTestCase(TestCase):
         order.add_line_item("PROD000", 1, 1.00, 2.0) # 200% discount
 
         self.assertEquals(0.0, order.total_amount(), "Order amount should be zero, not negative")
+
+class PackingListTestCase(TestCase):
+
+    def test_packing_list_empty(self):
+        pl = PackingListFactory.build()
+        self.assertIsNone(pl.find_item("PROD000"), "Packing list should have been empty")
+
+    def test_packing_list_add_item(self):
+        pl = PackingListFactory.build()
+        pl.add_item("PROD000", "ORD000", 1)
+
+        product = pl.find_item("PROD000")
+        self.assertEquals(1, product.total_items(), "Incorrect number of items for product in packing list")
+
+    def test_packing_list_item_from_multiple_orders(self):
+        pl = PackingListFactory.build()
+        pl.add_item("PROD000", "ORD000", 1)
+        pl.add_item("PROD000", "ORD001", 1)
+        pl.add_item("PROD001", "ORD000", 3)
+        pl.add_item("PROD002", "ORD002", 7)
+
+        self.assertEquals(2, pl.find_item("PROD000").total_items(),
+            "Incorrect number of items for product in packing list")
+        self.assertEquals(3, pl.find_item("PROD001").total_items(),
+            "Incorrect number of items for product in packing list")
+        self.assertEquals(7, pl.find_item("PROD002").total_items(),
+            "Incorrect number of items for product in packing list")

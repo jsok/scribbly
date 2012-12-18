@@ -22,20 +22,20 @@ class Order(Entity):
     def total_amount(self):
         return reduce(operator.add, [i.amount() for i in self.line_items], 0.00)
 
-    def add_line_item(self, product_id, quantity, price, discount):
-        self.line_items.append(self.LineItem(product_id, quantity, price, discount))
+    def add_line_item(self, sku, quantity, price, discount):
+        self.line_items.append(self.LineItem(sku, quantity, price, discount))
 
     class LineItem():
         """
         Order specific line item.
         """
-        product_id = None
+        sku = None
         quantity = None
         price = None
         discount = None
 
-        def __init__(self, product_id, quantity, price, discount):
-            self.product_id = product_id
+        def __init__(self, sku, quantity, price, discount):
+            self.sku = sku
             self.quantity = quantity
             self.price = price
             self.discount = discount

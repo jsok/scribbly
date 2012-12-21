@@ -18,9 +18,15 @@ class PackingList(Entity):
     def find_item(self, sku):
         return self.line_items.get(sku)
 
+    def allocate_item(self, sku, quantity):
+        item = self.find_item(sku)
+        if item:
+            item.allocated = quantity
+
     class PackingListItem(LineItem):
         def __init__(self, sku):
             self.sku = sku
+            self.allocated = 0
             self.order_entries = []
 
         def add_entry(self, order_id, quantity):

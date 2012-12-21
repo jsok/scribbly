@@ -58,3 +58,20 @@ class PackingListTestCase(TestCase):
             "Incorrect number of items for product in packing list")
         self.assertEquals(7, pl.find_item("PROD002").quantity,
             "Incorrect number of items for product in packing list")
+
+    def test_packing_list_all_items_available(self):
+        pl = PackingListFactory.build()
+        pl.add_item("PROD000", 1, "ORD000")
+
+        pl.allocate_item("PROD000", 1)
+
+        self.assertEquals(1, pl.find_item("PROD000").allocated, "Incorrect number of items were report for product")
+
+    def test_packing_list_report_item_not_in_list(self):
+        pl = PackingListFactory.build()
+        pl.add_item("PROD000", 1, "ORD000")
+
+        pl.allocate_item("PRODFAKE", 1)
+
+        self.assertEquals(0, pl.find_item("PROD000").allocated, "Incorrect number of items were report for product")
+        self.assertIsNone(pl.find_item("PRODFAKE"), "Fake product should not be in packing list")

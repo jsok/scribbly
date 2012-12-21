@@ -1,31 +1,24 @@
 import operator
 
 from domain.shared.entity import  Entity
+from domain.model.sales.line_item import LineItem
 
 class PackingList(Entity):
-    id = None
-    date = None
-    packer = None
-    items = None
-
     def __init__(self, id, date, packer=None, items=None):
         self.id = id
         self.date = date
         self.packer = packer if packer else None
-        self.items = items if items else {}
+        self.line_items = items if items else {}
 
-    def add_item(self, sku, order_id, quantity):
-        item = self.items.get(sku, self.Item(sku))
+    def add_item(self, sku, quantity, order_id):
+        item = self.line_items.get(sku, self.PackingListItem(sku))
         item.add_entry(order_id, quantity)
-        self.items.update({sku: item})
+        self.line_items.update({sku: item})
 
     def find_item(self, sku):
-        return self.items.get(sku)
+        return self.line_items.get(sku)
 
-    class Item(object):
-        sku = None
-        order_entries = None
-
+    class PackingListItem(LineItem):
         def __init__(self, sku):
             self.sku = sku
             self.order_entries = []
@@ -33,5 +26,6 @@ class PackingList(Entity):
         def add_entry(self, order_id, quantity):
             self.order_entries.append((order_id, quantity))
 
-        def total_items(self):
+        @property
+        def quantity(self):
             return reduce(operator.add, [qty for _, qty in self.order_entries], 0)

@@ -40,21 +40,21 @@ class PackingListTestCase(TestCase):
 
     def test_packing_list_add_item(self):
         pl = PackingListFactory.build()
-        pl.add_item("PROD000", "ORD000", 1)
+        pl.add_item("PROD000", 1, "ORD000")
 
         product = pl.find_item("PROD000")
-        self.assertEquals(1, product.total_items(), "Incorrect number of items for product in packing list")
+        self.assertEquals(1, product.quantity, "Incorrect number of items for product in packing list")
 
     def test_packing_list_item_from_multiple_orders(self):
         pl = PackingListFactory.build()
-        pl.add_item("PROD000", "ORD000", 1)
-        pl.add_item("PROD000", "ORD001", 1)
-        pl.add_item("PROD001", "ORD000", 3)
-        pl.add_item("PROD002", "ORD002", 7)
+        pl.add_item("PROD000", 1, "ORD000")
+        pl.add_item("PROD000", 1, "ORD001")
+        pl.add_item("PROD001", 3, "ORD000")
+        pl.add_item("PROD002", 7, "ORD002")
 
-        self.assertEquals(2, pl.find_item("PROD000").total_items(),
+        self.assertEquals(2, pl.find_item("PROD000").quantity,
             "Incorrect number of items for product in packing list")
-        self.assertEquals(3, pl.find_item("PROD001").total_items(),
+        self.assertEquals(3, pl.find_item("PROD001").quantity,
             "Incorrect number of items for product in packing list")
-        self.assertEquals(7, pl.find_item("PROD002").total_items(),
+        self.assertEquals(7, pl.find_item("PROD002").quantity,
             "Incorrect number of items for product in packing list")

@@ -1,6 +1,6 @@
 from unittest import TestCase, skip
 
-from factories.sales import OrderFactory, PackingListFactory
+from factories.sales import OrderFactory, PackingListFactory, InvoiceFactory
 
 class SalesOrderTestCase(TestCase):
 
@@ -75,3 +75,33 @@ class PackingListTestCase(TestCase):
 
         self.assertEquals(0, pl.find_item("PROD000").allocated, "Incorrect number of items were report for product")
         self.assertIsNone(pl.find_item("PRODFAKE"), "Fake product should not be in packing list")
+
+class SalesInvoiceTestCase(TestCase):
+
+    def test_invoice_is_accepted(self):
+        invoice = InvoiceFactory.build()
+
+        self.assertIsNotNone(invoice.id, "Invoice ID was not set")
+        self.assertIsNotNone(invoice.invoice_date, "Invoice date was not set")
+        self.assertFalse(invoice.finalised, "Invoice should not have been acknowledged")
+
+    def test_invoice_adds_line_item(self):
+        invoice = InvoiceFactory.build()
+        invoice.add_line_item("PROD000", 1, 100.00, 0.10)
+
+        self.assertEquals(1, len(invoice.line_items), "Line item was not added to Invoice correctly")
+        self.assertEquals(90.00, invoice.total_amount(), "Incorrect order amount calculated")
+
+    def test_invoice_with_varied_line_items(self):
+        invoice = InvoiceFactory.build()
+        invoice.add_line_item("PROD000", 1, 100.00, 0.10)
+        invoice.add_line_item("PROD001", 1, 10.00, 0.00)
+
+        self.assertEquals(2, len(invoice.line_items), "Both line items were not added correctly")
+        self.assertEquals(100.00, invoice.total_amount(), "Incorrect invoice amount calculated")
+
+    def test_invoice_with_invalid_discount_line_item(self):
+        invoice = InvoiceFactory.build()
+        invoice.add_line_item("PROD000", 1, 1.00, 2.0) # 200% discount
+
+        self.assertEquals(0.0, invoice.total_amount(), "Invoice amount should be zero, not negative")

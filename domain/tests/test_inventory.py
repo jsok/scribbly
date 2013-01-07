@@ -71,55 +71,59 @@ class InventoryTestCase(TestCase):
         item = InventoryItemFactory.build(on_hand=1)
         item.commit(1, "ORD000")
 
-        item.fulfill_commitment(1, "ORD000")
+        item.fulfill_commitment(1, "ORD000", "INV000")
 
         committed_items = item.find_committed("ORD000")
 
         self.assertEqual(0, len(committed_items), "Item commitment was not fulfilled")
         self.assertEquals(0, item.total_committed(), "No more commitments should remain")
+        self.assertEquals(1, len(item.fulfillments), "Fulfillment was not recorded")
+        self.assertEquals("INV000", item.fulfillments[0].invoice_id, "Fulfillment was not recorded with correct Invoice ID")
 
     def test_fulfill_commitment_partially(self):
         item = InventoryItemFactory.build(on_hand=3)
         item.commit(2, "ORD000")
 
-        item.fulfill_commitment(1, "ORD000")
+        item.fulfill_commitment(1, "ORD000", "INV000")
 
         committed_items = item.find_committed("ORD000")
 
         self.assertEqual(1, len(committed_items), "Item commitment was not fulfilled")
         self.assertEquals(1, item.total_committed(), "Only one item should remain committed")
+        self.assertEquals(1, len(item.fulfillments), "Fulfillment was not recorded")
 
     def test_fulfill_multiple_commitments_exactly(self):
         item = InventoryItemFactory.build(on_hand=3)
         item.commit(1, "ORD000")
         item.commit(1, "ORD000")
 
-        item.fulfill_commitment(2, "ORD000")
+        item.fulfill_commitment(2, "ORD000", "INV000")
 
         committed_items = item.find_committed("ORD000")
 
         self.assertEqual(0, len(committed_items), "Item commitment was not fulfilled")
-        self.assertEquals(0, item.total_committed(), "There should be no more remaining commitments")
+        self.assertEquals(2, len(item.fulfillments), "Both fulfillments were not recorded")
 
     def test_fulfill_multiple_commitments_partially(self):
         item = InventoryItemFactory.build(on_hand=4)
         item.commit(2, "ORD000")
         item.commit(2, "ORD000")
 
-        item.fulfill_commitment(3, "ORD000")
+        item.fulfill_commitment(3, "ORD000", "INV000")
 
         committed_items = item.find_committed("ORD000")
 
         self.assertEqual(1, len(committed_items), "Item commitment was not fulfilled")
         self.assertEquals(1, item.total_committed(), "Only one item should have been committed")
+        self.assertEquals(2, len(item.fulfillments), "Both fulfillments were not recorded")
 
     def test_fulfill_multiple_order_commitments(self):
         item = InventoryItemFactory.build(on_hand=4)
         item.commit(2, "ORD000")
         item.commit(2, "ORD001")
 
-        item.fulfill_commitment(2, "ORD000")
-        item.fulfill_commitment(2, "ORD001")
+        item.fulfill_commitment(2, "ORD000", "INV000")
+        item.fulfill_commitment(2, "ORD001", "INV000")
 
         committed_items = item.find_committed("ORD000")
         self.assertEqual(0, len(committed_items), "Item commitment was not fulfilled")
@@ -129,6 +133,8 @@ class InventoryTestCase(TestCase):
         self.assertEqual(0, len(committed_items), "Item commitment was not fulfilled")
         self.assertEquals(0, item.total_committed(), "There should be no more remaining commitments")
 
+        self.assertEquals(2, len(item.fulfillments), "Fulfillment was not recorded")
+
     def test_cannot_fulfill_commitment(self):
         item = InventoryItemFactory.build(on_hand=1)
         item.commit(2, "ORD000")
@@ -136,10 +142,11 @@ class InventoryTestCase(TestCase):
         committed_items = item.find_committed("ORD000")
         self.assertEqual(1, len(committed_items), "Items were not committed")
 
-        item.fulfill_commitment(3, "ORD000")
+        item.fulfill_commitment(3, "ORD000", "INV000")
 
         committed_items = item.find_committed("ORD000")
         self.assertEqual(1, len(committed_items), "Items should not have been fulfilled")
+        self.assertEquals(0, len(item.fulfillments), "Fulfillment should not have been created")
 
     def test_oldest_commitment_fulfilled_first(self):
         item = InventoryItemFactory.build(on_hand=4)
@@ -155,12 +162,16 @@ class InventoryTestCase(TestCase):
             else:
                 second = commitment
 
-        item.fulfill_commitment(3, "ORD000")
+        item.fulfill_commitment(3, "ORD000", "INV000")
 
         committed_items = item.find_committed("ORD000")
         self.assertEqual(1, len(committed_items), "Item commitment was not fulfilled")
         self.assertEquals(1, item.total_committed(), "Only one item should have been committed")
         self.assertEqual(committed_items[0].date, second.date, "Oldest item was not fulfilled first")
+
+        fulfilled_items = item.find_fulfillment("INV000")
+        self.assertEquals(1, len(fulfilled_items), "Fulfillment was not recorded")
+        self.assertEquals(3, fulfilled_items[0].quantity, "Fulfillment was not recorded with correct Invoice ID")
 
     def test_enter_stock_increases_on_hand(self):
         item = InventoryItemFactory.build(on_hand=0)

@@ -5,19 +5,22 @@ from domain.shared.entity import Entity
 
 from domain.model.inventory.committed_item import CommittedItem
 from domain.model.inventory.backordered_item import BackOrderedItem
+from domain.model.inventory.fulfilled_item import FulfilledItem
 
 class InventoryItem(Entity):
     sku = None
     on_hand = None
     committed = None
     backorders = None
+    fulfillments = None
     purchase_orders = None
 
-    def __init__(self, sku, on_hand, committed=None, backorders=None, purchase_orders=None):
+    def __init__(self, sku, on_hand, committed=None, backorders=None, fulfillments=None, purchase_orders=None):
         self.sku = sku
         self.on_hand = on_hand
         self.committed = committed if committed else []
         self.backorders = backorders if backorders else []
+        self.fulfillments = fulfillments if fulfillments else []
         self.purchase_orders = purchase_orders if purchase_orders else []
 
     def commit(self, quantity, order_id):
@@ -46,23 +49,35 @@ class InventoryItem(Entity):
     def total_backorders(self):
         return reduce(operator.add, [c.quantity for c in self.backorders], 0)
 
-    def fulfill_commitment(self, quantity, order_id):
+    def find_fulfillment(self, invoice_id):
+        return [i for i in self.fulfillments if i.invoice_id == invoice_id]
+
+    def fulfill_commitment(self, quantity, order_id, invoice_id):
         commitments = self.find_committed(order_id)
         commitments.sort(key=lambda c: c.date, reverse=False)
 
         total_commitments = reduce(operator.add, [c.quantity for c in commitments])
 
-        if (total_commitments < quantity):
+        if (quantity > total_commitments):
             # We cannot fulfil the requested quantity
             return
 
         for commitment in commitments:
             if quantity < commitment.quantity:
+                # Partial fulfillment
                 commitment.quantity -= quantity
+                fulfillment = FulfilledItem(self.sku, datetime.datetime.now(), quantity, order_id, invoice_id)
+                self.fulfillments.append(fulfillment)
                 break
             else:
+                # Complete fulfillment
                 quantity -= commitment.quantity
+                fulfillment = FulfilledItem(self.sku, datetime.datetime.now(), commitment.quantity, order_id, invoice_id)
+                self.fulfillments.append(fulfillment)
                 self.committed.remove(commitment)
+
+            if quantity == 0:
+                break
 
     def enter_stock(self, quantity):
         self.on_hand += quantity

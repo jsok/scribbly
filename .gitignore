@@ -1,2 +1,4 @@
 *.pyc
 virtualenv/*
+.coverage
+.idea

@@ -1,6 +1,6 @@
 import factory
 
-from domain.model.product import product, product_collection
+from domain.model.product import product, product_collection, taxon
 
 class ProductFactory(factory.Factory):
     FACTORY_FOR = product.Product
@@ -13,3 +13,8 @@ class ProductCollectionFactory(factory.Factory):
     FACTORY_FOR = product_collection.ProductCollection
 
     name = "Default Product Collection"
+
+class TaxonFactory(factory.Factory):
+    FACTORY_FOR = taxon.Taxon
+
+    name = "Taxon"

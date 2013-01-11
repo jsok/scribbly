@@ -1,13 +1,11 @@
 import datetime
 
-class PriceValue(object):
+from domain.shared.historical_value import HistoricalValue
+
+class PriceValue(HistoricalValue):
     '''
     A price of a product at a particular point in time.
     '''
 
     def __init__(self, price, date):
-        self.price = price
-        self.date = date
-
-    def __cmp__(self, other):
-        return cmp(self.date, other.date)
+        super(PriceValue, self).__init__(price, date)

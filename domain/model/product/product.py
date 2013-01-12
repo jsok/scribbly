@@ -11,6 +11,7 @@ class Product(Entity):
         self.sku = sku
         self.name = name
         self.collections = []
+        self.flags = {}
 
         if not isinstance(price, PriceValue):
             raise TypeError()
@@ -48,3 +49,9 @@ class Product(Entity):
         if isinstance(collection, ProductCollection):
             if collection.remove_product(self.sku):
                 self.collections.remove(collection)
+
+    def set_flag(self, name, value):
+        self.flags[name] = True if value else False
+
+    def get_flag(self, name):
+        return self.flags.get(name, False)

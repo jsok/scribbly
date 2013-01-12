@@ -100,6 +100,21 @@ class ProductCollectionTestCase(TestCase):
         for p in replacements:
             self.assertEquals(1, len(p.collections), "%s is not aware it's in a collection" % p.sku)
 
+class ProductFlagsTestCase(TestCase):
+
+    def test_set_flag(self):
+        p = ProductFactory.build()
+
+        p.set_flag("Sale", True)
+        p.set_flag("Hot", 1)
+
+        self.assertTrue(p.get_flag("Sale"), "Sale flag was not set")
+        self.assertTrue(p.get_flag("Hot"), "Hot flag was not set")
+        self.assertFalse(p.get_flag("Deprecated"), "Deprecated flag should not be set")
+
+        p.set_flag("Hot", False)
+        self.assertFalse(p.get_flag("Hot"), "Hot flag was not cleared")
+
 class TaxonTestCase(TestCase):
 
     def test_single_root_taxon(self):

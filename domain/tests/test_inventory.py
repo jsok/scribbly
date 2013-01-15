@@ -258,3 +258,12 @@ class InventoryTestCase(TestCase):
         self.assertEquals(1, item.on_hand, "On hand quantity was not increased")
         self.assertIsNotNone(po, "Purchase order was unable to be found")
         self.assertEquals(1, po.quantity, "Purchase order quantity was not modified")
+
+    def test_fulfill_purchase_order_nonexistent(self):
+        item = InventoryItemFactory.build(sku="PROD000", on_hand=1)
+
+        item.fulfill_purchase_order("POXXX", quantity=1)
+        po = item.find_purchase_order("POXXX")
+
+        self.assertEquals(1, item.on_hand, "On hand quantity should not have been modified")
+        self.assertIsNone(po, "Purchase order should be unable to be found")

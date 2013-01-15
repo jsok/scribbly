@@ -1,7 +1,7 @@
 import datetime
 import factory
 
-from domain.model.product import product, product_collection, taxon
+from domain.model.product import product, product_collection
 from domain.model.product.price_value import PriceValue
 
 class ProductFactory(factory.Factory):
@@ -21,8 +21,3 @@ class ProductCollectionFactory(factory.Factory):
     FACTORY_FOR = product_collection.ProductCollection
 
     name = "Default Product Collection"
-
-class TaxonFactory(factory.Factory):
-    FACTORY_FOR = taxon.Taxon
-
-    name = "Taxon"

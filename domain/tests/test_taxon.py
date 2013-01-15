@@ -26,3 +26,21 @@ class TaxonTestCase(TestCase):
 
         self.assertEquals("/Root/Middle", child2.path_basename(), "Child base path was generated incorrectly")
         self.assertEquals("/Root/Middle/Child 2", child2.path(), "Child path was generated incorrectly")
+
+    def test_taxon_with_products(self):
+        taxon = TaxonFactory.build(name="Root")
+        child = TaxonFactory.build(name="Child", parent=taxon)
+
+        taxon.add_product("PROD000")
+        taxon.add_product("PROD001")
+
+        child.add_product("PROD000")
+
+        self.assertEquals(2, len(taxon.products), "Incorrect number of products in root taxon")
+        self.assertEquals(1, len(child.products), "Incorrect nunber of products in child taxon")
+
+        child.remove_product("PRODFAKE")
+        self.assertEquals(1, len(child.products), "Non-existent product removed other product from child taxon")
+
+        child.remove_product("PROD000")
+        self.assertEquals(0, len(child.products), "Product not removed from child taxon")

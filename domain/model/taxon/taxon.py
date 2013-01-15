@@ -4,6 +4,15 @@ class Taxon(Entity):
     def __init__(self, name, parent=None):
         self.name = name
         self.parent = parent if parent else None
+        self.products = []
+
+    def add_product(self, sku):
+        if sku not in self.products:
+            self.products.append(sku)
+
+    def remove_product(self, sku):
+        if sku in self.products:
+            self.products.remove(sku)
 
     def path_basename(self):
         return '/' + '/'.join(self._path()[:-1])

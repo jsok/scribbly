@@ -3,6 +3,9 @@ import operator
 
 from domain.shared.entity import Entity
 
+from domain.model.inventory.tracker import TrackingStateMachine
+from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, FulfilledState, PurchaseOrderState
+
 class InventoryItem(Entity):
     """
     An inventory item is responsible for tracking items of a specific SKU in the following states:
@@ -23,13 +26,12 @@ class InventoryItem(Entity):
     def __init__(self, sku):
         self.sku = sku
 
-        from domain.model.inventory.tracker import TrackingStateMachine
-        from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, FulfilledState
         self.tracker = TrackingStateMachine()
         self.tracker.add_state(OnHandState("OnHand"))
         self.tracker.add_state(CommittedState("Committed"))
         self.tracker.add_state(BackorderState("Backorder"))
         self.tracker.add_state(FulfilledState("Fulfilled"))
+        self.tracker.add_state(PurchaseOrderState("PurchaseOrder"))
 
         self.tracker.add_transition("commit", "OnHand", "Committed")
         self.tracker.add_transition("allocate", "OnHand", "Backorder")
@@ -41,11 +43,14 @@ class InventoryItem(Entity):
         self.tracker.add_transition("revert", "Committed", "OnHand")
         self.tracker.add_transition("fulfill", "Committed", "Fulfilled")
 
+        self.tracker.add_transition("delivery", "PurchaseOrder", "OnHand")
+
         # Some shortcut attributes
         self.on_hand = self.tracker.state("OnHand")
         self.committed = self.tracker.state("Committed")
         self.backorders = self.tracker.state("Backorder")
         self.fulfilled = self.tracker.state("Fulfilled")
+        self.purchase_orders = self.tracker.state("PurchaseOrder")
 
     # On Hand methods
 
@@ -165,3 +170,33 @@ class InventoryItem(Entity):
 
     def quantity_fulfilled(self, invoice_id=None):
         return self.fulfilled.quantity(invoice_id=invoice_id)
+
+    # Purchase order methods
+
+    def find_purchase_order(self, purchase_order_id):
+        return self.purchase_orders.get(purchase_order_id)
+
+    def quantity_purchased(self, purchase_order_id=None):
+        return self.purchase_orders.quantity(purchase_order_id=purchase_order_id)
+
+    def purchase_item(self, quantity, purchase_order_id, eta_date=None):
+
+        self.purchase_orders.track({
+            "quantity": quantity,
+            "purchase_order_id": purchase_order_id,
+            "date": datetime.now(),
+            "eta_date": eta_date if eta_date else None,
+         })
+
+    def deliver_purchase_order(self, quantity, warehouse, purchase_order_id):
+        po = self.find_purchase_order(purchase_order_id)
+        if po is None:
+            return
+
+        self.tracker.transition("delivery",
+            {"quantity": quantity, "purchase_order_id": purchase_order_id, "date": datetime.now()},
+            {"quantity": quantity, "warehouse": warehouse}
+        )()
+
+    def cancel_purchase_order(self, purchase_order_id):
+        self.purchase_orders.cancel(purchase_order_id)

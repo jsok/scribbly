@@ -275,3 +275,42 @@ class InventoryFulfilledTestCase(TestCase):
         self.assertEquals(1, item.quantity_fulfilled("INV002"), "Item was not fulfilled")
 
         self.assertEquals(2, item.quantity_fulfilled(), "Total number of fulfillments incorrect")
+
+class InventoryPurchaseOrderTestCase(TestCase):
+
+    def test_purchase_order_delivery(self):
+        item = InventoryItemFactory.build()
+
+        next_week = datetime.datetime.now() + datetime.timedelta(weeks=1)
+        next_month = datetime.datetime.now() + datetime.timedelta(weeks=4)
+
+        item.purchase_item(10, "PO001", eta_date=next_week)
+        item.purchase_item(5, "PO002", eta_date=next_month)
+
+        self.assertEquals(10, item.quantity_purchased(purchase_order_id="PO001"), "Should have 10 items on PO001")
+        self.assertEquals(5, item.quantity_purchased(purchase_order_id="PO002"), "Should have 5 items on PO002")
+        self.assertEquals(15, item.quantity_purchased(), "Should have 15 items in total on purchase order")
+
+        item.deliver_purchase_order(9, "WHSE001", "PO001")
+
+        self.assertEquals(1, item.quantity_purchased(purchase_order_id="PO001"), "Should now have 1 item on PO001")
+        self.assertEquals(6, item.quantity_purchased(), "Should 6 items in total remaining on purchase order")
+        self.assertEquals(9, item.effective_quantity_on_hand(), "Should now be 9 items on hand")
+
+        item.deliver_purchase_order(5, "WHSE001", "PO002")
+
+        self.assertEquals(0, item.quantity_purchased(purchase_order_id="PO002"), "PO002 should be empty")
+        self.assertEquals(1, item.quantity_purchased(), "Should 1 item in total remaining on purchase order")
+        self.assertEquals(14, item.effective_quantity_on_hand(), "Should now be 14 items on hand")
+
+        # re-delivery should fail
+        item.deliver_purchase_order(1, "WHSE001", "PO002")
+        self.assertEquals(0, item.quantity_purchased(purchase_order_id="PO002"), "PO002 should be empty")
+        self.assertEquals(1, item.quantity_purchased(), "Should 1 item in total remaining on purchase order")
+        self.assertEquals(14, item.effective_quantity_on_hand(), "Should now be 14 items on hand")
+
+        # cancel remaining item on PO001
+        item.cancel_purchase_order("PO001")
+        self.assertEquals(0, item.quantity_purchased(purchase_order_id="PO001"), "PO001 should be empty")
+        self.assertEquals(0, item.quantity_purchased(), "No purchase orders should remain")
+        self.assertEquals(14, item.effective_quantity_on_hand(), "Should now be 14 items on hand")

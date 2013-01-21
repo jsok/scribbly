@@ -308,3 +308,57 @@ class FulfilledState(TrackingState):
             return 0 if not self.items.has_key(invoice_id) else self.items.get(invoice_id).quantity
         else:
             return reduce(operator.add, [item.quantity for item in self.items.values()], 0)
+
+class PurchaseOrderState(TrackingState):
+
+    class PurchasedItem(TrackingState.TrackingItem):
+        """
+        A fulfilled item has been removed from the warehouse and sent to a customer as part of a delivery.
+        This item tracks when it was fulfilled and how.
+        """
+        def __init__(self, properties):
+            super(self.__class__, self).__init__()
+            self.quantity = properties.get("quantity", 0)
+            self.date = properties.get("date", None)
+            self.eta_date = properties.get("eta_date", None)
+            self.purchase_order_id = properties.get("purchase_order_id", None)
+
+            self.validations.extend([
+                (lambda i: i.quantity >= 0),
+                (lambda i: i.date is not None),
+                (lambda i: i.purchase_order_id is not None),
+                ])
+
+    def __init__(self, name):
+        super(self.__class__, self).__init__(name, self.PurchasedItem)
+        self.items = {}
+
+    def _track(self, item):
+        # Invoices are immutable once entered
+        if item.purchase_order_id in self.items: # pragma: no cover
+            return
+
+        self.items.update({ item.purchase_order_id: item })
+
+    def get(self, purchase_order_id):
+        return self.items.get(purchase_order_id, None)
+
+    def quantity(self, purchase_order_id=None):
+        if purchase_order_id:
+            return 0 if not self.items.has_key(purchase_order_id) else self.items.get(purchase_order_id).quantity
+        else:
+            return reduce(operator.add, [item.quantity for item in self.items.values()], 0)
+
+    def delivery(self, to_state, from_item, to_item):
+        item = self.items.get(from_item.purchase_order_id)
+
+        if item.quantity == from_item.quantity:
+            del self.items[item.purchase_order_id]
+        else:
+            item.quantity -= from_item.quantity
+
+        to_state.track(to_item)
+
+    def cancel(self, purchase_order_id):
+        # We don't usually allow this, but there is no logical transition for it
+        self.items.pop(purchase_order_id)

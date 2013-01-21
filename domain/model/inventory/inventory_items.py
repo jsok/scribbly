@@ -36,6 +36,7 @@ class InventoryItem(Entity):
         self.tracker.add_transition("fulfill_backorder", "Backorder", "Committed")
 
         self.tracker.add_transition("backorder_commitment", "Committed", "Backorder")
+        self.tracker.add_transition("revert", "Committed", "OnHand")
         #self.tracker.add_transition("fulfill_commitment", "Committed", "Fulfilled")
 
         # Some shortcut attributes
@@ -96,6 +97,18 @@ class InventoryItem(Entity):
             {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()},
             {"quantity": quantity, "order_id": order_id, "date": datetime.now(), "allocated": 0}
         )()
+
+    def revert(self, quantity, warehouse, order_id):
+        commitment = self.find_committed_for_order(order_id)
+        if not commitment or not commitment.has_key(warehouse):
+            return
+
+        self.tracker.transition("revert",
+            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()},
+            {"quantity": quantity, "warehouse": warehouse}
+        )()
+
+    # Backorder methods
 
     def find_backorder_for_order(self, order_id):
         return self.backorders.get(order_id)

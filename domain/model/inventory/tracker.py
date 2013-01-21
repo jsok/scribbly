@@ -8,8 +8,7 @@ class TrackingStateMachine(object):
         self.transitions = {}
 
     def state(self, name):
-        if self.states.has_key(name):
-            return self.states.get(name)
+        return self.states.get(name, None)
 
     def add_state(self, state):
         if not isinstance(state, TrackingState):
@@ -125,14 +124,16 @@ class OnHandState(TrackingState):
         else:
             return reduce(operator.add, [qty for qty in self.items.values()], 0)
 
+    def _reduce_quantity_for(self, warehouse, quantity):
+        current_quantity = self.items.get(warehouse)
+        self.items.update({ warehouse: current_quantity - quantity })
+
     def commit(self, to_state, from_item, to_item):
-        current_quantity = self.items.get(from_item.warehouse)
-        self.items.update({ from_item.warehouse: current_quantity - from_item.quantity })
+        self._reduce_quantity_for(from_item.warehouse, from_item.quantity)
         to_state.track(to_item)
 
     def allocate(self, to_state, from_item, to_item):
-        current_quantity = self.items.get(from_item.warehouse)
-        self.items.update({ from_item.warehouse: current_quantity - from_item.quantity })
+        self._reduce_quantity_for(from_item.warehouse, from_item.quantity)
         to_state.track(to_item)
 
 
@@ -186,11 +187,23 @@ class CommittedState(TrackingState):
 
         return quantity
 
-    def backorder_commitment(self, to_state, to_item):
-        pass
+    def _reduce_quantity_for(self, order_id, warehouse, quantity):
+        warehouses = self.items.get(order_id)
+        item = warehouses.get(warehouse)
 
-    def fulfill(self, to_state, to_item):
-        pass
+        if item.quantity == quantity:
+            del warehouses[warehouse]
+        else:
+            item.quantity -= quantity
+
+    def backorder_commitment(self, to_state, from_item, to_item):
+        self._reduce_quantity_for(from_item.order_id, from_item.warehouse, from_item.quantity)
+        to_state.track(to_item)
+
+    def revert(self, to_state, from_item, to_item):
+        self._reduce_quantity_for(from_item.order_id, from_item.warehouse, from_item.quantity)
+        to_state.track(to_item)
+
 
 
 class BackorderState(TrackingState):
@@ -231,10 +244,7 @@ class BackorderState(TrackingState):
 
     def quantity(self, order_id=None):
         if order_id:
-            if self.items.has_key(order_id):
-                return self.items[order_id].quantity
-            else:
-                return 0
+            return 0 if not self.items.has_key(order_id) else self.items.get(order_id).quantity
         else:
             return reduce(operator.add, [item.quantity for item in self.items.values()], 0)
 

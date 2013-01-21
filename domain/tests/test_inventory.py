@@ -314,3 +314,32 @@ class InventoryPurchaseOrderTestCase(TestCase):
         self.assertEquals(0, item.quantity_purchased(purchase_order_id="PO001"), "PO001 should be empty")
         self.assertEquals(0, item.quantity_purchased(), "No purchase orders should remain")
         self.assertEquals(14, item.effective_quantity_on_hand(), "Should now be 14 items on hand")
+
+class InventoryLostAndFoundTestCase(TestCase):
+
+    def test_lost_and_found(self):
+        item = InventoryItemFactory.build()
+        item.enter_stock_on_hand(10, "WHSE001")
+        item.enter_stock_on_hand(5, "WHSE002")
+
+        self.assertEquals(15, item.effective_quantity_on_hand(), "On hand count should be initialised to 15")
+
+        item.lost_stock(1, "WHSE001")
+        self.assertEquals(14, item.effective_quantity_on_hand(), "On hand count should have reduced to 14")
+        self.assertEquals(9, item.effective_quantity_on_hand(warehouse="WHSE001"),
+            "On hand count for WHSE001 should have reduced to 9")
+
+        item.found_stock(2, "WHSE001")
+        self.assertEquals(16, item.effective_quantity_on_hand(), "On hand count should have increased to 16")
+
+        item.lost_stock(1, "WHSE002")
+        self.assertEquals(15, item.effective_quantity_on_hand(), "On hand count should have reduced to 15")
+        self.assertEquals(4, item.effective_quantity_on_hand(warehouse="WHSE002"),
+            "On hand count for WHSE002 should have reduced to 4")
+
+        self.assertEquals(2, item.quantity_lost(), "Total lost count should be 2")
+        self.assertEquals(1, item.quantity_lost("WHSE001"), "Total lost count for WHSE001 should be 1")
+        self.assertEquals(1, item.quantity_lost("WHSE002"), "Total lost count for WHSE001 should be 1")
+        self.assertEquals(2, item.quantity_found(), "Total found count should be 2")
+        self.assertEquals(2, item.quantity_found("WHSE001"), "Total found count for WHSE001 should be 2")
+        self.assertEquals(0, item.quantity_found("WHSE002"), "Total found count for WHSE002 should be 0")

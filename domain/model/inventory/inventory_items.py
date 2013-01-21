@@ -4,7 +4,8 @@ import operator
 from domain.shared.entity import Entity
 
 from domain.model.inventory.tracker import TrackingStateMachine
-from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, FulfilledState, PurchaseOrderState
+from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, FulfilledState, \
+    PurchaseOrderState, LostAndFoundState
 
 class InventoryItem(Entity):
     """
@@ -21,6 +22,7 @@ class InventoryItem(Entity):
     - Fulfill sale commitment
     - Fulfill backorders -> commit for sale
     - Create purchase order for expected delivery of stock
+    - Track lost & found stock
     """
 
     def __init__(self, sku):
@@ -32,6 +34,8 @@ class InventoryItem(Entity):
         self.tracker.add_state(BackorderState("Backorder"))
         self.tracker.add_state(FulfilledState("Fulfilled"))
         self.tracker.add_state(PurchaseOrderState("PurchaseOrder"))
+        self.tracker.add_state(LostAndFoundState("Lost"))
+        self.tracker.add_state(LostAndFoundState("Found"))
 
         self.tracker.add_transition("commit", "OnHand", "Committed")
         self.tracker.add_transition("allocate", "OnHand", "Backorder")
@@ -45,12 +49,17 @@ class InventoryItem(Entity):
 
         self.tracker.add_transition("delivery", "PurchaseOrder", "OnHand")
 
+        self.tracker.add_transition("lost", "OnHand", "Lost")
+        self.tracker.add_transition("found", "Found", "OnHand")
+
         # Some shortcut attributes
         self.on_hand = self.tracker.state("OnHand")
         self.committed = self.tracker.state("Committed")
         self.backorders = self.tracker.state("Backorder")
         self.fulfilled = self.tracker.state("Fulfilled")
         self.purchase_orders = self.tracker.state("PurchaseOrder")
+        self.lost = self.tracker.state("Lost")
+        self.found = self.tracker.state("Found")
 
     # On Hand methods
 
@@ -200,3 +209,25 @@ class InventoryItem(Entity):
 
     def cancel_purchase_order(self, purchase_order_id):
         self.purchase_orders.cancel(purchase_order_id)
+
+    # Lost and Found methods
+
+    def quantity_lost(self, warehouse=None):
+        return self.lost.quantity(warehouse=warehouse)
+
+    def quantity_found(self, warehouse=None):
+        return self.found.quantity(warehouse=warehouse)
+
+    def lost_stock(self, quantity, warehouse):
+
+        self.tracker.transition("lost",
+            {"quantity": quantity, "warehouse": warehouse},
+            {"quantity": quantity, "warehouse": warehouse, "date": datetime.now()}
+        )()
+
+    def found_stock(self, quantity, warehouse):
+
+        self.tracker.transition("found",
+            {"quantity": quantity, "warehouse": warehouse, "date": datetime.now()},
+            {"quantity": quantity, "warehouse": warehouse}
+        )()

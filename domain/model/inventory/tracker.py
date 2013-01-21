@@ -77,16 +77,20 @@ class TrackingState(object):
         An item cannot be 'untracked', items only move between states via transitions.
         Item may either be a dictionary, or an item if being called internally.
         If a dictionary, we must perform any necessary validations before tracking is allowed.
+        Do not override, see _track method instead.
         """
         if not isinstance(item, self.item_type):
             item = self._validated_item(item)
         if item:
             self._track(item)
 
-    def _track(self, item):
+    def _track(self, item): # pragma: no cover
+        """
+        Internal track method all implementors provide.
+        """
         raise NotImplementedError()
 
-    def quantity(self, key=None):
+    def quantity(self, key=None): # pragma: no cover
         """
         Quantity of items tracked, most implementors will have additional keys to filter on.
         """
@@ -159,6 +163,7 @@ class CommittedState(TrackingState):
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.CommittedItem)
         self.items = {}
+        # items is dict of dict: { order_id: { warehouse: item } }
 
     def _track(self, item):
         if self.items.has_key(item.order_id):

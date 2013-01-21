@@ -30,6 +30,9 @@ class InventoryStatesTestCase(TestCase):
     def test_invalid_transition(self):
         self.machine.add_transition("foobar", "OnHand", "Committed")
 
+    def test_perform_invalid_transition(self):
+        self.machine.transition("foobar", None, None)
+
     def test_transition_commit(self):
         # Test begins here
         self.machine.state("OnHand").track({"quantity": 10, "warehouse": "WHSE001"})

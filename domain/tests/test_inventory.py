@@ -139,8 +139,33 @@ class InventoryCommitTestCase(TestCase):
         self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should still be committed to WHSE001")
         self.assertEquals(3, item.quantity_committed(warehouse="WHSE002"), "3 items should still be committed to WHSE002")
         self.assertEquals(3, item.quantity_backordered(), "Incorrect number of backorders after commit")
-        self.assertEquals(1, item.quantity_backordered(order_id="ORD003"), "ORD003 should not have backorder qty of 1")
-        self.assertEquals(1, item.quantity_backordered(order_id="ORD004"), "ORD004 should not have backorder qty of 1")
+        self.assertEquals(1, item.quantity_backordered(order_id="ORD003"), "ORD003 should now have backorder qty of 1")
+        self.assertEquals(1, item.quantity_backordered(order_id="ORD004"), "ORD004 should now have backorder qty of 1")
+
+    def test_backorder_commitment(self):
+        item = InventoryItemFactory.build()
+        item.enter_stock_on_hand(3, "WHSE001")
+        item.commit(2, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
+        self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should be committed to WHSE001")
+
+        # Ensure bogus backorder has no effect
+        item.backorder_commitment(100, "WHSEXXX", "ORDXXX")
+        self.assertEquals(1, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
+        self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should be committed to WHSE001")
+
+        # Backorder part of the commitment
+        item.backorder_commitment(1, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "Only 1 items should still be committed to")
+        self.assertEquals(1, item.quantity_backordered(order_id="ORD001"), "ORD001 should now have backorder qty of 1")
+
+        # Backorder the remainder
+        item.backorder_commitment(1, "WHSE001", "ORD001")
+        self.assertEquals(0, item.quantity_committed(warehouse="WHSE001"), "Only 1 items should still be committed to")
+        self.assertEquals(2, item.quantity_backordered(order_id="ORD001"), "ORD001 should now have backorder qty of 1")
+
 
 
 class InventoryFulfillBackordersTestCase(TestCase):

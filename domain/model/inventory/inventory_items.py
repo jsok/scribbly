@@ -87,6 +87,16 @@ class InventoryItem(Entity):
             "allocated": 0}
         )
 
+    def backorder_commitment(self, quantity, warehouse, order_id):
+        commitment = self.find_committed_for_order(order_id)
+        if not commitment or not commitment.has_key(warehouse):
+            return
+
+        self.tracker.transition("backorder_commitment",
+            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()},
+            {"quantity": quantity, "order_id": order_id, "date": datetime.now(), "allocated": 0}
+        )()
+
     def find_backorder_for_order(self, order_id):
         return self.backorders.get(order_id)
 

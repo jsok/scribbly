@@ -150,8 +150,10 @@ class InventoryCommitTestCase(TestCase):
         self.assertEquals(1, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
         self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should be committed to WHSE001")
 
-        # Ensure bogus backorder has no effect
+        # Ensure bogus backorders have no effect
         item.backorder_commitment(100, "WHSEXXX", "ORDXXX")
+        item.backorder_commitment(100, "WHSEXXX", "ORD001")
+        item.backorder_commitment(100, "WHSE001", "ORDXXX")
         self.assertEquals(1, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
         self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should be committed to WHSE001")
 
@@ -173,7 +175,12 @@ class InventoryCommitTestCase(TestCase):
         item.commit(2, "WHSE001", "ORD001")
 
         item.revert(1, "WHSE001", "ORD001")
+
+        # Ensure bogus reverts don't pass
+        item.revert(100, "WHSEXXX", "ORD001")
+        item.revert(100, "WHSE001", "ORDXXX")
         item.revert(100, "WHSEXXX", "ORDXXX")
+
         self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "Only 1 commitment should remain after " +
                                                                            "revert")
         self.assertEquals(2, item.effective_quantity_on_hand(), "2 should now be in stock")

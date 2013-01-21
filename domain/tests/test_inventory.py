@@ -179,7 +179,7 @@ class InventoryCommitTestCase(TestCase):
         self.assertEquals(2, item.effective_quantity_on_hand(), "2 should now be in stock")
 
 
-class InventoryFulfillBackordersTestCase(TestCase):
+class InventoryBackordersTestCase(TestCase):
 
     def test_fulfill_backorder_partial(self):
         item = InventoryItemFactory.build()
@@ -225,3 +225,16 @@ class InventoryFulfillBackordersTestCase(TestCase):
         item.fulfill_backorder(2, "WHSE001", "ORD001")
         self.assertEquals(1, item.effective_quantity_on_hand(), "Warehouse qty should not have changed")
         self.assertEquals(1, item.quantity_backordered(), "Backorder qty should not have changed")
+
+    def test_cancel_backorder(self):
+        item = InventoryItemFactory.build()
+        item.commit(1, "WHSE001", "ORD001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should be empty")
+        self.assertEquals(1, item.quantity_backordered(order_id="ORD001"), "Commit should have created 1 backorder")
+
+        item.cancel_backorder("WHSE001", "ORD001")
+        item.cancel_backorder("WHSE001", "ORDXXX")
+
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should still be empty")
+        self.assertEquals(0, item.quantity_backordered(), "Cancel should have removed backorder")

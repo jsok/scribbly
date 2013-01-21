@@ -83,17 +83,17 @@ class TrackingState(object):
         if item:
             self._track(item)
 
-    def _track(self, item): # pragma: no cover
+    def _track(self, item):
         """
         Internal track method all implementors provide.
         """
-        raise NotImplementedError()
+        raise NotImplementedError() # pragma: no cover
 
-    def quantity(self, key=None): # pragma: no cover
+    def quantity(self, key=None):
         """
         Quantity of items tracked, most implementors will have additional keys to filter on.
         """
-        raise NotImplementedError()
+        raise NotImplementedError() # pragma: no cover
 
 
 class OnHandState(TrackingState):
@@ -105,7 +105,7 @@ class OnHandState(TrackingState):
             self.warehouse = properties.get("warehouse", None)
 
             self.validations.extend([
-                (lambda i: i.quantity > 0),
+                (lambda i: i.quantity >= 0),
                 (lambda i: i.warehouse is not None),
                 ])
 
@@ -258,4 +258,8 @@ class BackorderState(TrackingState):
             item.quantity -= from_item.allocated
             item.allocated -= from_item.allocated
 
+        to_state.track(to_item)
+
+    def cancel_backorder(self, to_state, from_item, to_item):
+        del self.items[from_item.order_id]
         to_state.track(to_item)

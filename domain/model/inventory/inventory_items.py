@@ -34,6 +34,7 @@ class InventoryItem(Entity):
         self.tracker.add_transition("allocate", "OnHand", "Backorder")
 
         self.tracker.add_transition("fulfill_backorder", "Backorder", "Committed")
+        self.tracker.add_transition("cancel_backorder", "Backorder", "OnHand")
 
         self.tracker.add_transition("backorder_commitment", "Committed", "Backorder")
         self.tracker.add_transition("revert", "Committed", "OnHand")
@@ -133,4 +134,15 @@ class InventoryItem(Entity):
         self.tracker.transition("fulfill_backorder",
             {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": quantity},
             {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()}
+        )()
+
+    def cancel_backorder(self, warehouse, order_id):
+        backorder = self.find_backorder_for_order(order_id)
+        if backorder is None:
+            return
+
+        # Cancel the entire backorder and return any allocated stock to OnHand
+        self.tracker.transition("cancel_backorder",
+            {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": 0},
+            {"quantity": backorder.allocated, "warehouse": warehouse}
         )()

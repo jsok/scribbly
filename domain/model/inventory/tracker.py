@@ -313,8 +313,8 @@ class PurchaseOrderState(TrackingState):
 
     class PurchasedItem(TrackingState.TrackingItem):
         """
-        A fulfilled item has been removed from the warehouse and sent to a customer as part of a delivery.
-        This item tracks when it was fulfilled and how.
+        When an purchase order for an item is issued to a supplier we track it.
+        This item tracks when it was issue and when we expect it.
         """
         def __init__(self, properties):
             super(self.__class__, self).__init__()

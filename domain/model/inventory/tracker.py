@@ -204,6 +204,9 @@ class CommittedState(TrackingState):
         self._reduce_quantity_for(from_item.order_id, from_item.warehouse, from_item.quantity)
         to_state.track(to_item)
 
+    def fulfill(self, to_state, from_item, to_item):
+        self._reduce_quantity_for(from_item.order_id, from_item.warehouse, from_item.quantity)
+        to_state.track(to_item)
 
 
 class BackorderState(TrackingState):
@@ -263,3 +266,45 @@ class BackorderState(TrackingState):
     def cancel_backorder(self, to_state, from_item, to_item):
         del self.items[from_item.order_id]
         to_state.track(to_item)
+
+
+class FulfilledState(TrackingState):
+
+    class FulfilledItem(TrackingState.TrackingItem):
+        """
+        A fulfilled item has been removed from the warehouse and sent to a customer as part of a delivery.
+        This item tracks when it was fulfilled and how.
+        """
+        def __init__(self, properties):
+            super(self.__class__, self).__init__()
+            self.quantity = properties.get("quantity", 0)
+            self.date = properties.get("date", None)
+            self.order_id = properties.get("order_id", None)
+            self.invoice_id = properties.get("invoice_id", None)
+
+            self.validations.extend([
+                (lambda i: i.quantity >= 0),
+                (lambda i: i.date is not None),
+                (lambda i: i.order_id is not None),
+                (lambda i: i.invoice_id is not None),
+                ])
+
+    def __init__(self, name):
+        super(self.__class__, self).__init__(name, self.FulfilledItem)
+        self.items = {}
+
+    def _track(self, item):
+        # Invoices are immutable once entered
+        if item.invoice_id in self.items: # pragma: no cover
+            return
+
+        self.items.update({ item.invoice_id: item })
+
+    def get(self, invoice_id):
+        return self.items.get(invoice_id, None)
+
+    def quantity(self, invoice_id=None):
+        if invoice_id:
+            return 0 if not self.items.has_key(invoice_id) else self.items.get(invoice_id).quantity
+        else:
+            return reduce(operator.add, [item.quantity for item in self.items.values()], 0)

@@ -245,3 +245,33 @@ class InventoryBackordersTestCase(TestCase):
 
         self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should still be empty")
         self.assertEquals(0, item.quantity_backordered(), "Cancel should have removed backorder")
+
+class InventoryFulfilledTestCase(TestCase):
+
+    def test_fulfill_commitment(self):
+        item = InventoryItemFactory.build()
+        item.enter_stock_on_hand(2, "WHSE001")
+        item.commit(2, "WHSE001", "ORD001")
+
+        item.fulfill_commitment(1, "WHSE001", "ORD001", "INV001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should be empty")
+        self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "One unfilfilled item should remain")
+        self.assertEquals(1, item.quantity_fulfilled("INV001"), "Item was not fulfilled")
+
+        invoice = item.find_fulfillment_for_invoice("INV001")
+        self.assertEquals(1, invoice.quantity, "Invoice has incorrect quantity")
+        self.assertEquals("ORD001", invoice.order_id, "Invoice has incorrect Order")
+
+        # Using the same invoice twice should not commit
+        item.fulfill_commitment(1, "WHSE001", "ORD001", "INV001")
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should be empty")
+        self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "One unfilfilled item should remain")
+        self.assertEquals(1, item.quantity_fulfilled("INV001"), "Item was not fulfilled")
+
+        item.fulfill_commitment(1, "WHSE001", "ORD001", "INV002")
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should be empty")
+        self.assertEquals(0, item.quantity_committed(warehouse="WHSE001"), "One unfilfilled item should remain")
+        self.assertEquals(1, item.quantity_fulfilled("INV002"), "Item was not fulfilled")
+
+        self.assertEquals(2, item.quantity_fulfilled(), "Total number of fulfillments incorrect")

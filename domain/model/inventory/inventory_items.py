@@ -20,15 +20,16 @@ class InventoryItem(Entity):
     - Create purchase order for expected delivery of stock
     """
 
-    def __init__(self, sku, fulfillments=None, purchase_orders=None):
+    def __init__(self, sku):
         self.sku = sku
 
         from domain.model.inventory.tracker import TrackingStateMachine
-        from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState
+        from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, FulfilledState
         self.tracker = TrackingStateMachine()
         self.tracker.add_state(OnHandState("OnHand"))
         self.tracker.add_state(CommittedState("Committed"))
         self.tracker.add_state(BackorderState("Backorder"))
+        self.tracker.add_state(FulfilledState("Fulfilled"))
 
         self.tracker.add_transition("commit", "OnHand", "Committed")
         self.tracker.add_transition("allocate", "OnHand", "Backorder")
@@ -38,15 +39,13 @@ class InventoryItem(Entity):
 
         self.tracker.add_transition("backorder_commitment", "Committed", "Backorder")
         self.tracker.add_transition("revert", "Committed", "OnHand")
-        #self.tracker.add_transition("fulfill_commitment", "Committed", "Fulfilled")
+        self.tracker.add_transition("fulfill", "Committed", "Fulfilled")
 
         # Some shortcut attributes
         self.on_hand = self.tracker.state("OnHand")
         self.committed = self.tracker.state("Committed")
         self.backorders = self.tracker.state("Backorder")
-
-        self.fulfillments = fulfillments if fulfillments else []
-        self.purchase_orders = purchase_orders if purchase_orders else []
+        self.fulfilled = self.tracker.state("Fulfilled")
 
     # On Hand methods
 
@@ -88,6 +87,18 @@ class InventoryItem(Entity):
             "order_id": order_id,
             "allocated": 0}
         )
+
+    def fulfill_commitment(self, quantity, warehouse, order_id, invoice_id):
+        commitment = self.find_committed_for_order(order_id)
+        if not commitment or \
+                not commitment.has_key(warehouse) or \
+                self.find_fulfillment_for_invoice(invoice_id) is not None:
+            return
+
+        self.tracker.transition("fulfill",
+            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()},
+            {"quantity": quantity, "order_id": order_id, "invoice_id": invoice_id, "date": datetime.now()},
+        )()
 
     def backorder_commitment(self, quantity, warehouse, order_id):
         commitment = self.find_committed_for_order(order_id)
@@ -146,3 +157,11 @@ class InventoryItem(Entity):
             {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": 0},
             {"quantity": backorder.allocated, "warehouse": warehouse}
         )()
+
+    # Fulfilled item methods
+
+    def find_fulfillment_for_invoice(self, invoice_id):
+        return self.fulfilled.get(invoice_id=invoice_id)
+
+    def quantity_fulfilled(self, invoice_id=None):
+        return self.fulfilled.quantity(invoice_id=invoice_id)

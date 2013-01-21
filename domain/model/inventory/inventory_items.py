@@ -32,9 +32,10 @@ class InventoryItem(Entity):
 
         self.tracker.add_transition("commit", "OnHand", "Committed")
         self.tracker.add_transition("allocate", "OnHand", "Backorder")
+
         self.tracker.add_transition("fulfill_backorder", "Backorder", "Committed")
 
-        #self.tracker.add_transition("backorder_commitment", "Committed", "Backorder")
+        self.tracker.add_transition("backorder_commitment", "Committed", "Backorder")
         #self.tracker.add_transition("fulfill_commitment", "Committed", "Fulfilled")
 
         # Some shortcut attributes
@@ -44,6 +45,8 @@ class InventoryItem(Entity):
 
         self.fulfillments = fulfillments if fulfillments else []
         self.purchase_orders = purchase_orders if purchase_orders else []
+
+    # On Hand methods
 
     def enter_stock_on_hand(self, quantity, warehouse):
         self.on_hand.track({"quantity": quantity, "warehouse": warehouse})
@@ -55,6 +58,8 @@ class InventoryItem(Entity):
         physical_quantity = self.on_hand.quantity(warehouse=warehouse)
         committed_quantity = self.committed.quantity(warehouse=warehouse)
         return physical_quantity + committed_quantity
+
+    # Commited Items methods
 
     def find_committed_for_order(self, order_id):
         return self.committed.get(order_id)
@@ -88,7 +93,7 @@ class InventoryItem(Entity):
     def quantity_backordered(self, order_id=None):
         return self.backorders.quantity(order_id=order_id)
 
-    def fulfill_backorder(self, order_id, quantity, warehouse):
+    def fulfill_backorder(self, quantity, warehouse, order_id):
         backorder = self.find_backorder_for_order(order_id)
 
         # We cannot fulfill the requested quantity
@@ -96,8 +101,6 @@ class InventoryItem(Entity):
            quantity > self.quantity_backordered(order_id=order_id) or \
            quantity > self.effective_quantity_on_hand(warehouse=warehouse):
             return
-
-        # XXX: These need to be done atomically
 
         self.tracker.transition("allocate",
             {"quantity": quantity, "warehouse": warehouse},

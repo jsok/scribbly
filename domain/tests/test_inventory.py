@@ -153,7 +153,7 @@ class InventoryFulfillBackordersTestCase(TestCase):
         item.enter_stock_on_hand(1, "WHSE001")
         self.assertEquals(1, item.effective_quantity_on_hand(), "Warehouse should have qty of 1 on hand")
 
-        item.fulfill_backorder("ORD001", 1, "WHSE001")
+        item.fulfill_backorder(1, "WHSE001", "ORD001")
         self.assertEquals(1, item.quantity_backordered(), "Backorder should have been reduced to qty of 1")
         self.assertEquals(1, item.quantity_committed(), "A commitment of 1 item should have been created")
         self.assertEquals(0, item.effective_quantity_on_hand(), "On hand quantity should be 0")
@@ -169,7 +169,7 @@ class InventoryFulfillBackordersTestCase(TestCase):
         item.enter_stock_on_hand(3, "WHSE001")
         self.assertEquals(3, item.effective_quantity_on_hand(), "Warehouse should have qty of 1 on hand")
 
-        item.fulfill_backorder("ORD001", 2, "WHSE001")
+        item.fulfill_backorder(2, "WHSE001", "ORD001")
         self.assertEquals(0, item.quantity_backordered(), "No backorders should remain")
         self.assertEquals(2, item.quantity_committed(), "A commitment of 2 items should have been created")
         self.assertEquals(1, item.effective_quantity_on_hand(), "On hand quantity of 1 should be remain")
@@ -183,7 +183,6 @@ class InventoryFulfillBackordersTestCase(TestCase):
         self.assertEquals(1, item.quantity_backordered(), "Commit should have created 1 backorder")
 
         # Impossible fulfillment
-        item.fulfill_backorder("ORD001", 2, "WHSE001")
+        item.fulfill_backorder(2, "WHSE001", "ORD001")
         self.assertEquals(1, item.effective_quantity_on_hand(), "Warehouse qty should not have changed")
         self.assertEquals(1, item.quantity_backordered(), "Backorder qty should not have changed")
-

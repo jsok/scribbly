@@ -1,6 +1,6 @@
 from unittest import TestCase, skip
 
-from domain.tests.factories.customer import ContactFactory
+from domain.tests.factories.customer import CustomerFactory, ContactFactory
 
 class ContactTestCase(TestCase):
 
@@ -28,3 +28,30 @@ class ContactTestCase(TestCase):
         self.assertIsNone(contact.get_phone("foo"), "No phone number should be registered with OTHER type")
         self.assertIsNotNone(contact.get_phone("MOBILE"), "MOBILE phone entry not found")
         self.assertIsNotNone(contact.get_phone("OFFICE"), "OFFICE phone entry not found")
+
+
+
+class CustomerTestCase(TestCase):
+
+    def test_customer_one_contact_per_role(self):
+        customer = CustomerFactory.build()
+        sales_contact = ContactFactory.build(firstname="Sales")
+        sales_contact.add_role("SALES")
+
+        acct_contact = ContactFactory.build(firstname="Accounts")
+        acct_contact.add_role("ACCOUNTS")
+
+        customer.add_contact(sales_contact)
+        customer.add_contact(acct_contact)
+        customer.add_contact("XXX")
+
+        self.assertEquals(2, len(customer.contacts), "Wrong number of contacts added to customer")
+
+        sales_contacts = customer.get_contacts("SALES")
+        self.assertEquals(1, len(sales_contacts), "Could not find any sales contacts")
+        self.assertEquals("Sales", sales_contacts[0].firstname, "Found wrong sales contacts")
+
+        acct_contacts = customer.get_contacts("ACCOUNTS")
+        self.assertEquals(1, len(acct_contacts), "Could not find any accounts contacts")
+        self.assertEquals("Accounts", acct_contacts[0].firstname, "Found wrong accounts contacts")
+

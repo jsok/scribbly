@@ -17,7 +17,7 @@ Install requirements:
 
 Run tests:
 ```
-# nosetests domain -v [--with-coverage  --cover-package=domain]
+# nosetests domain -d -v [--with-coverage  --cover-package=domain --cover-html]
 ```
 
 Design

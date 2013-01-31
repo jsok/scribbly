@@ -1,269 +1,345 @@
 import datetime
 
 from unittest import TestCase, skip
+from nose.tools import raises
 
-from factories.inventory import InventoryItemFactory, BackorderFactory, CommitmentFactory, PurchaseOrderFactory
+from factories.inventory import InventoryItemFactory
+from domain.model.inventory.tracker import *
 
-class InventoryTestCase(TestCase):
+class InventoryStatesTestCase(TestCase):
 
-    def test_commit_lt_on_hand(self):
-        item = InventoryItemFactory.build(on_hand=2)
-        item.commit(1, "ORD000")
+    def setUp(self):
+        self.machine = TrackingStateMachine()
 
-        committed_items = item.find_committed("ORD000")
+        # Setup states
+        self.machine.add_state(OnHandState("OnHand"))
+        self.machine.add_state(CommittedState("Committed"))
 
-        self.assertEqual(1, item.on_hand, "On hand count was not reduced correctly")
-        self.assertFalse(committed_items == [], "No items were committed")
-        self.assertEqual(1, len(committed_items), "Not exactly one item was committed")
-        self.assertEqual(1, committed_items[0].quantity, "Incorrect number of items were committed")
-        self.assertEqual("ORD000", committed_items[0].order_id, "Incorrect order ID was set")
-        self.assertEquals(1, item.total_committed(), "Only one item should have been committed")
+        # Add transitions between states
+        self.machine.add_transition("commit", "OnHand", "Committed")
 
-    def test_commit_eq_on_hand(self):
-        item = InventoryItemFactory.build(on_hand=1)
-        item.commit(1, "ORD000")
+    @raises(TypeError)
+    def test_invalid_state(self):
+        self.machine.add_state(None)
 
-        committed_items = item.find_committed("ORD000")
+    @raises(ValueError)
+    def test_invalid_transition_states(self):
+        self.machine.add_transition("commit", "Foo", "Bar")
 
-        self.assertEqual(0, item.on_hand, "On hand count was not reduced correctly")
-        self.assertFalse(committed_items == [], "No items were committed")
-        self.assertEqual(1, len(committed_items), "Not exactly one item was committed")
-        self.assertEqual(1, committed_items[0].quantity, "Incorrect number of items were committed")
-        self.assertEqual("ORD000", committed_items[0].order_id, "Incorrect order ID was set")
-        self.assertEquals(1, item.total_committed(), "Only one item should have been committed")
+    @raises(ValueError)
+    def test_invalid_transition(self):
+        self.machine.add_transition("foobar", "OnHand", "Committed")
 
-    def test_commit_creates_backorder(self):
-        item = InventoryItemFactory.build(on_hand=1)
-        item.commit(2, "ORD000")
+    def test_perform_invalid_transition(self):
+        self.machine.transition("foobar", None, None)
 
-        committed_items = item.find_committed("ORD000")
-        backorders = item.find_backorders("ORD000")
+    def test_transition_commit(self):
+        # Test begins here
+        self.machine.state("OnHand").track({"quantity": 10, "warehouse": "WHSE001"})
+        self.machine.state("Committed").track({"quantity": 5, "warehouse": "WHSE001", "order_id": "ORD001",
+                                               "date": datetime.datetime.now()})
 
-        self.assertEqual(0, item.on_hand, "On hand count was not reduced correctly")
+        self.assertEquals(10, self.machine.state("OnHand").quantity(), "On Hand quantity not initialised correctly")
+        self.assertEquals(5, self.machine.state("Committed").quantity(), "Wrong number of items committed")
 
-        self.assertFalse(committed_items == [], "No items were committed")
-        self.assertEqual(1, len(committed_items), "Not exactly one item was committed")
-        self.assertEqual(1, committed_items[0].quantity, "Incorrect number of items were committed")
-        self.assertEqual("ORD000", committed_items[0].order_id, "Incorrect order ID was set")
-        self.assertEquals(1, item.total_committed(), "Only one item should have been committed")
+        self.machine.transition("commit",
+            {"quantity": 5, "warehouse": "WHSE001"},
+            {"quantity": 5, "warehouse": "WHSE001", "order_id": "ORD002", "date": datetime.datetime.now()})()
 
-        self.assertFalse(backorders == [], "No items were backordered")
-        self.assertEqual(1, len(backorders), "Not exactly one item was backordered")
-        self.assertEqual(1, backorders[0].quantity, "Incorrect number of items were backordered")
-        self.assertEqual("ORD000", backorders[0].order_id, "Incorrect order ID was set")
-        self.assertEquals(1, item.total_backorders(), "Backorder quantity incorrectly calculated")
+        self.assertEquals(5, self.machine.state("OnHand").quantity(), "On Hand quantity not reduced")
+        self.assertEquals(10, self.machine.state("Committed").quantity(), "Wrong number of items committed")
 
-    def test_commit_creates_additional_backorder(self):
-        existing_backorder = BackorderFactory.build(sku="PROD000", order_id="ORD999")
-        item = InventoryItemFactory.build(on_hand=0, backorders=[existing_backorder])
+class InventoryOnHandTestCase(TestCase):
 
-        item.commit(1, "ORD000")
+    def test_enter_stock_on_hand(self):
+        item = InventoryItemFactory.build()
 
-        backorders = item.find_backorders("ORD000")
-        self.assertFalse(backorders == [], "No items were backordered")
-        self.assertEqual(1, len(backorders), "Not exactly one item was backordered")
-        self.assertEqual(1, backorders[0].quantity, "Incorrect number of items were backordered")
-        self.assertEqual("ORD000", backorders[0].order_id, "Incorrect order ID was set")
-        self.assertEquals(0, item.total_committed(), "Items should not have been committed")
-        self.assertEquals(2, item.total_backorders(), "Backorder quantity incorrectly calculated")
+        item.enter_stock_on_hand(10, "WHSE001")
 
-    def test_fulfil_commitment_exactly(self):
-        item = InventoryItemFactory.build(on_hand=1)
-        item.commit(1, "ORD000")
+        self.assertEquals(10, item.physical_quantity_on_hand(), "Incorrect on hand count set")
 
-        item.fulfill_commitment(1, "ORD000", "INV000")
+    def test_enter_stock_on_hand_multiple_locations(self):
+        item = InventoryItemFactory.build()
 
-        committed_items = item.find_committed("ORD000")
+        item.enter_stock_on_hand(1, "WHSE001")
+        item.enter_stock_on_hand(1, "WHSE001")
+        item.enter_stock_on_hand(1, "WHSE002")
 
-        self.assertEqual(0, len(committed_items), "Item commitment was not fulfilled")
-        self.assertEquals(0, item.total_committed(), "No more commitments should remain")
-        self.assertEquals(1, len(item.fulfillments), "Fulfillment was not recorded")
-        self.assertEquals("INV000", item.fulfillments[0].invoice_id, "Fulfillment was not recorded with correct Invoice ID")
+        self.assertEquals(3, item.physical_quantity_on_hand(), "Incorrect on hand count for all warehouses")
+        self.assertEquals(2, item.physical_quantity_on_hand(warehouse="WHSE001"), "Incorrect on hand count for warehouse 1")
+        self.assertEquals(1, item.physical_quantity_on_hand(warehouse="WHSE002"), "Incorrect on hand count for warehouse 2")
 
-    def test_fulfill_commitment_partially(self):
-        item = InventoryItemFactory.build(on_hand=3)
-        item.commit(2, "ORD000")
+    def test_enter_negative_stock(self):
+        item = InventoryItemFactory.build()
 
-        item.fulfill_commitment(1, "ORD000", "INV000")
+        item.enter_stock_on_hand(-1, "WHSE001")
 
-        committed_items = item.find_committed("ORD000")
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Incorrect on hand count set")
 
-        self.assertEqual(1, len(committed_items), "Item commitment was not fulfilled")
-        self.assertEquals(1, item.total_committed(), "Only one item should remain committed")
-        self.assertEquals(1, len(item.fulfillments), "Fulfillment was not recorded")
+class InventoryCommitTestCase(TestCase):
 
-    def test_fulfill_multiple_commitments_exactly(self):
-        item = InventoryItemFactory.build(on_hand=3)
-        item.commit(1, "ORD000")
-        item.commit(1, "ORD000")
+    def test_commit_less_than_on_hand(self):
+        item = InventoryItemFactory.build()
+        item.enter_stock_on_hand(2, "WHSE001")
 
-        item.fulfill_commitment(2, "ORD000", "INV000")
+        self.assertEquals(2, item.physical_quantity_on_hand(), "Incorrect physical on-hand count set")
+        self.assertEquals(2, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set")
 
-        committed_items = item.find_committed("ORD000")
+        item.commit(1, "WHSE001", "ORD000")
 
-        self.assertEqual(0, len(committed_items), "Item commitment was not fulfilled")
-        self.assertEquals(2, len(item.fulfillments), "Both fulfillments were not recorded")
-
-    def test_fulfill_multiple_commitments_partially(self):
-        item = InventoryItemFactory.build(on_hand=4)
-        item.commit(2, "ORD000")
-        item.commit(2, "ORD000")
+        self.assertEquals(2, item.physical_quantity_on_hand(), "Incorrect physical on-hand count set after commit")
+        self.assertEquals(1, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
 
-        item.fulfill_commitment(3, "ORD000", "INV000")
+        committed_items = item.find_committed_for_order("ORD000")
 
-        committed_items = item.find_committed("ORD000")
+        self.assertFalse(committed_items == {}, "No items were committed")
+        self.assertEqual(1, item.quantity_committed(), "Not exactly one item was committed")
+        self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "Only one item should have been committed")
 
-        self.assertEqual(1, len(committed_items), "Item commitment was not fulfilled")
-        self.assertEquals(1, item.total_committed(), "Only one item should have been committed")
-        self.assertEquals(2, len(item.fulfillments), "Both fulfillments were not recorded")
+    def test_multiple_commit_from_multiple_warehouse_with_backorder(self):
+        item = InventoryItemFactory.build()
 
-    def test_fulfill_multiple_order_commitments(self):
-        item = InventoryItemFactory.build(on_hand=4)
-        item.commit(2, "ORD000")
-        item.commit(2, "ORD001")
+        item.enter_stock_on_hand(1, "WHSE001")
+        item.enter_stock_on_hand(1, "WHSE001")
+        item.enter_stock_on_hand(3, "WHSE002")
 
-        item.fulfill_commitment(2, "ORD000", "INV000")
-        item.fulfill_commitment(2, "ORD001", "INV000")
+        self.assertEquals(5, item.physical_quantity_on_hand(), "Incorrect on hand count for all warehouses")
+        self.assertEquals(2, item.physical_quantity_on_hand(warehouse="WHSE001"), "Incorrect on hand count for warehouse 1")
+        self.assertEquals(3, item.physical_quantity_on_hand(warehouse="WHSE002"), "Incorrect on hand count for warehouse 2")
 
-        committed_items = item.find_committed("ORD000")
-        self.assertEqual(0, len(committed_items), "Item commitment was not fulfilled")
-        self.assertEquals(0, item.total_committed(), "There should be no more remaining commitments")
+        item.commit(2, "WHSE001", "ORD001")
+        item.commit(1, "WHSE002", "ORD001")
 
-        committed_items = item.find_committed("ORD001")
-        self.assertEqual(0, len(committed_items), "Item commitment was not fulfilled")
-        self.assertEquals(0, item.total_committed(), "There should be no more remaining commitments")
+        self.assertEquals(5, item.physical_quantity_on_hand(), "Incorrect physical on-hand count set after commit")
+        self.assertEquals(2, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
+        self.assertEquals(0, item.effective_quantity_on_hand(warehouse="WHSE001"), "Incorrect effective on-hand count set after commit")
+        self.assertEquals(2, item.effective_quantity_on_hand(warehouse="WHSE002"), "Incorrect effective on-hand count set after commit")
 
-        self.assertEquals(2, len(item.fulfillments), "Fulfillment was not recorded")
+        committed_items = item.find_committed_for_order("ORD001")
 
-    def test_cannot_fulfill_commitment(self):
-        item = InventoryItemFactory.build(on_hand=1)
-        item.commit(2, "ORD000")
+        self.assertFalse(committed_items == {}, "No items were committed")
+        self.assertEqual(3, item.quantity_committed(), "Not exactly three items were committed")
+        self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "Only two items should have been committed")
+        self.assertEquals(1, item.quantity_committed(warehouse="WHSE002"), "Only one item should have been committed")
 
-        committed_items = item.find_committed("ORD000")
-        self.assertEqual(1, len(committed_items), "Items were not committed")
+        item.commit(3, "WHSE002", "ORD002")
 
-        item.fulfill_commitment(3, "ORD000", "INV000")
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
+        self.assertEquals(0, item.effective_quantity_on_hand(warehouse="WHSE002"), "Incorrect effective on-hand count set after commit")
+        self.assertEquals(3, item.quantity_committed(warehouse="WHSE002"), "Three items should now be committed")
 
-        committed_items = item.find_committed("ORD000")
-        self.assertEqual(1, len(committed_items), "Items should not have been fulfilled")
-        self.assertEquals(0, len(item.fulfillments), "Fulfillment should not have been created")
+        self.assertEquals(1, item.quantity_backordered(), "Incorrect number of backorders after commit")
+        self.assertEqual(0, item.quantity_backordered(order_id="ORD001"), "ORD001 should not have any backorders")
+        self.assertEquals(1, item.quantity_backordered(order_id="ORD002"), "ORD002 should not have backorder qty of 1")
 
-    def test_oldest_commitment_fulfilled_first(self):
-        item = InventoryItemFactory.build(on_hand=4)
-        item.commit(3, "ORD000")
-        item.commit(1, "ORD000")
+        item.commit(1, "WHSE001", "ORD003")
+        item.commit(1, "WHSE002", "ORD004")
 
-        committed_items = item.find_committed("ORD000")
-        for commitment in committed_items:
-            if commitment.quantity == 3:
-                first = commitment
-                # Subtract an hour to make the timestamp much older
-                first.date = first.date -  datetime.timedelta(hours=1)
-            else:
-                second = commitment
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
+        self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should still be committed to WHSE001")
+        self.assertEquals(3, item.quantity_committed(warehouse="WHSE002"), "3 items should still be committed to WHSE002")
+        self.assertEquals(3, item.quantity_backordered(), "Incorrect number of backorders after commit")
+        self.assertEquals(1, item.quantity_backordered(order_id="ORD003"), "ORD003 should now have backorder qty of 1")
+        self.assertEquals(1, item.quantity_backordered(order_id="ORD004"), "ORD004 should now have backorder qty of 1")
 
-        item.fulfill_commitment(3, "ORD000", "INV000")
+    def test_backorder_commitment(self):
+        item = InventoryItemFactory.build()
+        item.enter_stock_on_hand(3, "WHSE001")
+        item.commit(2, "WHSE001", "ORD001")
 
-        committed_items = item.find_committed("ORD000")
-        self.assertEqual(1, len(committed_items), "Item commitment was not fulfilled")
-        self.assertEquals(1, item.total_committed(), "Only one item should have been committed")
-        self.assertEqual(committed_items[0].date, second.date, "Oldest item was not fulfilled first")
+        self.assertEquals(1, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
+        self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should be committed to WHSE001")
 
-        fulfilled_items = item.find_fulfillment("INV000")
-        self.assertEquals(1, len(fulfilled_items), "Fulfillment was not recorded")
-        self.assertEquals(3, fulfilled_items[0].quantity, "Fulfillment was not recorded with correct Invoice ID")
+        # Ensure bogus backorders have no effect
+        item.backorder_commitment(100, "WHSEXXX", "ORDXXX")
+        item.backorder_commitment(100, "WHSEXXX", "ORD001")
+        item.backorder_commitment(100, "WHSE001", "ORDXXX")
+        self.assertEquals(1, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
+        self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should be committed to WHSE001")
 
-    def test_enter_stock_increases_on_hand(self):
-        item = InventoryItemFactory.build(on_hand=0)
-        self.assertEquals(0, item.on_hand, "On hand count was not initialised to zero")
-        item.enter_stock(1)
-        self.assertEquals(1, item.on_hand, "On hand count did not increase")
+        # Backorder part of the commitment
+        item.backorder_commitment(1, "WHSE001", "ORD001")
 
-    def test_remove_stock(self):
-        item = InventoryItemFactory.build(on_hand=1)
-        item.remove_stock(1)
-        self.assertEquals(0, item.on_hand, "On hand count was not decreased")
+        self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "Only 1 items should still be committed to")
+        self.assertEquals(1, item.quantity_backordered(order_id="ORD001"), "ORD001 should now have backorder qty of 1")
 
-    def test_remove_stock_gt_on_hand(self):
-        item = InventoryItemFactory.build(on_hand=1)
-        item.remove_stock(2)
-        self.assertEquals(1, item.on_hand, "On hand count should not have decreased")
+        # Backorder the remainder
+        item.backorder_commitment(1, "WHSE001", "ORD001")
+        self.assertEquals(0, item.quantity_committed(warehouse="WHSE001"), "Only 1 items should still be committed to")
+        self.assertEquals(2, item.quantity_backordered(order_id="ORD001"), "ORD001 should now have backorder qty of 1")
 
-    def test_remove_stock_with_existing_backorder(self):
-        existing_backorder = BackorderFactory.build(sku="PROD000", quantity=1, order_id="ORD000")
-        commitment = CommitmentFactory.build(sku="PROD000", quantity=1, order_id="ORD000")
-        item = InventoryItemFactory.build(on_hand=0, sku="PROD000",
-            backorders=[existing_backorder], committed=[commitment])
+    def test_revert_commitment(self):
+        item = InventoryItemFactory.build()
+        item.enter_stock_on_hand(3, "WHSE001")
 
-        item.remove_stock(1)
+        item.commit(2, "WHSE001", "ORD001")
 
-        committed_items = item.find_committed("ORD000")
-        backordered_items = item.find_backorders("ORD000")
+        item.revert(1, "WHSE001", "ORD001")
 
-        self.assertEqual(0, item.total_committed(), "Item commitment was not removed")
-        self.assertEqual(2, len(backordered_items), "Stock removal did not create backorder")
-        self.assertEquals(2, item.total_backorders(), "Wrong backorder quantity set")
+        # Ensure bogus reverts don't pass
+        item.revert(100, "WHSEXXX", "ORD001")
+        item.revert(100, "WHSE001", "ORDXXX")
+        item.revert(100, "WHSEXXX", "ORDXXX")
 
-    def test_remove_stock_propagates_committed_to_backorder(self):
-        commitment = CommitmentFactory.build(sku="PROD000", quantity=1, order_id="ORD000")
-        item = InventoryItemFactory.build(on_hand=0, sku="PROD000", committed=[commitment])
+        self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "Only 1 commitment should remain after " +
+                                                                           "revert")
+        self.assertEquals(2, item.effective_quantity_on_hand(), "2 should now be in stock")
 
-        item.remove_stock(1)
 
-        committed_items = item.find_committed("ORD000")
-        backordered_items = item.find_backorders("ORD000")
+class InventoryBackordersTestCase(TestCase):
 
-        self.assertEqual(0, len(committed_items), "Item commitment was not removed")
-        self.assertEqual(1, len(backordered_items), "Commitment was not converted to backorder")
-        self.assertEquals(1, item.total_backorders(), "Wrong backorder quantity set")
+    def test_fulfill_backorder_partial(self):
+        item = InventoryItemFactory.build()
 
-    def test_remove_stock_propagates_multiple_partial_committed_to_backorder(self):
-        commitment1 = CommitmentFactory.build(sku="PROD000", quantity=1, order_id="ORD000")
-        commitment2 = CommitmentFactory.build(sku="PROD000", quantity=3, order_id="ORD001")
-        item = InventoryItemFactory.build(on_hand=0, sku="PROD000",
-            committed=[commitment1, commitment2])
+        item.commit(2, "WHSE001", "ORD001")
 
-        item.remove_stock(2)
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should have no stock")
+        self.assertEquals(2, item.quantity_backordered(), "Commit should have created 2 backorders")
 
-        self.assertEqual(2, item.total_committed(), "Item commitment was not removed")
-        self.assertEqual(1, len(item.find_backorders("ORD000")), "Commitment was not converted to backorder")
-        self.assertEqual(1, len(item.find_backorders("ORD001")), "Commitment was not converted to backorder")
-        self.assertEquals(2, item.total_backorders(), "Wrong backorder quantity set")
+        item.enter_stock_on_hand(1, "WHSE001")
+        self.assertEquals(1, item.effective_quantity_on_hand(), "Warehouse should have qty of 1 on hand")
 
-    def test_add_purchase_order(self):
-        item = InventoryItemFactory.build(sku="PROD000", on_hand=1)
+        item.fulfill_backorder(1, "WHSE001", "ORD001")
+        self.assertEquals(1, item.quantity_backordered(), "Backorder should have been reduced to qty of 1")
+        self.assertEquals(1, item.quantity_committed(), "A commitment of 1 item should have been created")
+        self.assertEquals(0, item.effective_quantity_on_hand(), "On hand quantity should be 0")
 
-        po = PurchaseOrderFactory.build(sku="PROD000", quantity=1, purchase_order_id="PO000")
-        item.add_purchase_order(po)
+    def test_fulfill_backorder_completely(self):
+        item = InventoryItemFactory.build()
 
-        self.assertEquals(1, len(item.purchase_orders), "PO was not added")
-        self.assertEqual(po, item.find_purchase_order("PO000"), "Could not find purchase order")
+        item.commit(2, "WHSE001", "ORD001")
 
-    def test_fulfill_purchase_order(self):
-        po = PurchaseOrderFactory.build(sku="PROD000", quantity=1, purchase_order_id="PO000")
-        item = InventoryItemFactory.build(sku="PROD000", on_hand=0, purchase_orders=[po])
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should have no stock")
+        self.assertEquals(2, item.quantity_backordered(), "Commit should have created 2 backorders")
 
-        item.fulfill_purchase_order("PO000")
+        item.enter_stock_on_hand(3, "WHSE001")
+        self.assertEquals(3, item.effective_quantity_on_hand(), "Warehouse should have qty of 1 on hand")
 
-        self.assertEquals(1, item.on_hand, "On hand quantity was not increased")
-        self.assertIsNone(item.find_purchase_order("PO000"), "Purchase order was not removed after fulfillment")
+        item.fulfill_backorder(2, "WHSE001", "ORD001")
+        self.assertEquals(0, item.quantity_backordered(), "No backorders should remain")
+        self.assertEquals(2, item.quantity_committed(), "A commitment of 2 items should have been created")
+        self.assertEquals(1, item.effective_quantity_on_hand(), "On hand quantity of 1 should be remain")
 
-    def test_fulfill_purchase_order_partially(self):
-        po = PurchaseOrderFactory.build(sku="PROD000", quantity=2, purchase_order_id="PO000")
-        item = InventoryItemFactory.build(sku="PROD000", on_hand=0, purchase_orders=[po])
+    def test_fulfill_backorder_not_possible(self):
+        item = InventoryItemFactory.build()
+        item.commit(1, "WHSE001", "ORD001")
+        item.enter_stock_on_hand(1, "WHSE001")
 
-        item.fulfill_purchase_order("PO000", quantity=1)
-        po = item.find_purchase_order("PO000")
+        self.assertEquals(1, item.effective_quantity_on_hand(), "Warehouse should have on hand qty of 1")
+        self.assertEquals(1, item.quantity_backordered(), "Commit should have created 1 backorder")
 
-        self.assertEquals(1, item.on_hand, "On hand quantity was not increased")
-        self.assertIsNotNone(po, "Purchase order was unable to be found")
-        self.assertEquals(1, po.quantity, "Purchase order quantity was not modified")
+        # Impossible fulfillment
+        item.fulfill_backorder(2, "WHSE001", "ORD001")
+        self.assertEquals(1, item.effective_quantity_on_hand(), "Warehouse qty should not have changed")
+        self.assertEquals(1, item.quantity_backordered(), "Backorder qty should not have changed")
 
-    def test_fulfill_purchase_order_nonexistent(self):
-        item = InventoryItemFactory.build(sku="PROD000", on_hand=1)
+    def test_cancel_backorder(self):
+        item = InventoryItemFactory.build()
+        item.commit(1, "WHSE001", "ORD001")
 
-        item.fulfill_purchase_order("POXXX", quantity=1)
-        po = item.find_purchase_order("POXXX")
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should be empty")
+        self.assertEquals(1, item.quantity_backordered(order_id="ORD001"), "Commit should have created 1 backorder")
 
-        self.assertEquals(1, item.on_hand, "On hand quantity should not have been modified")
-        self.assertIsNone(po, "Purchase order should be unable to be found")
+        item.cancel_backorder("WHSE001", "ORD001")
+        item.cancel_backorder("WHSE001", "ORDXXX")
+
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should still be empty")
+        self.assertEquals(0, item.quantity_backordered(), "Cancel should have removed backorder")
+
+class InventoryFulfilledTestCase(TestCase):
+
+    def test_fulfill_commitment(self):
+        item = InventoryItemFactory.build()
+        item.enter_stock_on_hand(2, "WHSE001")
+        item.commit(2, "WHSE001", "ORD001")
+
+        item.fulfill_commitment(1, "WHSE001", "ORD001", "INV001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should be empty")
+        self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "One unfilfilled item should remain")
+        self.assertEquals(1, item.quantity_fulfilled("INV001"), "Item was not fulfilled")
+
+        invoice = item.find_fulfillment_for_invoice("INV001")
+        self.assertEquals(1, invoice.quantity, "Invoice has incorrect quantity")
+        self.assertEquals("ORD001", invoice.order_id, "Invoice has incorrect Order")
+
+        # Using the same invoice twice should not commit
+        item.fulfill_commitment(1, "WHSE001", "ORD001", "INV001")
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should be empty")
+        self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "One unfilfilled item should remain")
+        self.assertEquals(1, item.quantity_fulfilled("INV001"), "Item was not fulfilled")
+
+        item.fulfill_commitment(1, "WHSE001", "ORD001", "INV002")
+        self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should be empty")
+        self.assertEquals(0, item.quantity_committed(warehouse="WHSE001"), "One unfilfilled item should remain")
+        self.assertEquals(1, item.quantity_fulfilled("INV002"), "Item was not fulfilled")
+
+        self.assertEquals(2, item.quantity_fulfilled(), "Total number of fulfillments incorrect")
+
+class InventoryPurchaseOrderTestCase(TestCase):
+
+    def test_purchase_order_delivery(self):
+        item = InventoryItemFactory.build()
+
+        next_week = datetime.datetime.now() + datetime.timedelta(weeks=1)
+        next_month = datetime.datetime.now() + datetime.timedelta(weeks=4)
+
+        item.purchase_item(10, "PO001", eta_date=next_week)
+        item.purchase_item(5, "PO002", eta_date=next_month)
+
+        self.assertEquals(10, item.quantity_purchased(purchase_order_id="PO001"), "Should have 10 items on PO001")
+        self.assertEquals(5, item.quantity_purchased(purchase_order_id="PO002"), "Should have 5 items on PO002")
+        self.assertEquals(15, item.quantity_purchased(), "Should have 15 items in total on purchase order")
+
+        item.deliver_purchase_order(9, "WHSE001", "PO001")
+
+        self.assertEquals(1, item.quantity_purchased(purchase_order_id="PO001"), "Should now have 1 item on PO001")
+        self.assertEquals(6, item.quantity_purchased(), "Should 6 items in total remaining on purchase order")
+        self.assertEquals(9, item.effective_quantity_on_hand(), "Should now be 9 items on hand")
+
+        item.deliver_purchase_order(5, "WHSE001", "PO002")
+
+        self.assertEquals(0, item.quantity_purchased(purchase_order_id="PO002"), "PO002 should be empty")
+        self.assertEquals(1, item.quantity_purchased(), "Should 1 item in total remaining on purchase order")
+        self.assertEquals(14, item.effective_quantity_on_hand(), "Should now be 14 items on hand")
+
+        # re-delivery should fail
+        item.deliver_purchase_order(1, "WHSE001", "PO002")
+        self.assertEquals(0, item.quantity_purchased(purchase_order_id="PO002"), "PO002 should be empty")
+        self.assertEquals(1, item.quantity_purchased(), "Should 1 item in total remaining on purchase order")
+        self.assertEquals(14, item.effective_quantity_on_hand(), "Should now be 14 items on hand")
+
+        # cancel remaining item on PO001
+        item.cancel_purchase_order("PO001")
+        self.assertEquals(0, item.quantity_purchased(purchase_order_id="PO001"), "PO001 should be empty")
+        self.assertEquals(0, item.quantity_purchased(), "No purchase orders should remain")
+        self.assertEquals(14, item.effective_quantity_on_hand(), "Should now be 14 items on hand")
+
+class InventoryLostAndFoundTestCase(TestCase):
+
+    def test_lost_and_found(self):
+        item = InventoryItemFactory.build()
+        item.enter_stock_on_hand(10, "WHSE001")
+        item.enter_stock_on_hand(5, "WHSE002")
+
+        self.assertEquals(15, item.effective_quantity_on_hand(), "On hand count should be initialised to 15")
+
+        item.lost_stock(1, "WHSE001")
+        self.assertEquals(14, item.effective_quantity_on_hand(), "On hand count should have reduced to 14")
+        self.assertEquals(9, item.effective_quantity_on_hand(warehouse="WHSE001"),
+            "On hand count for WHSE001 should have reduced to 9")
+
+        item.found_stock(2, "WHSE001")
+        self.assertEquals(16, item.effective_quantity_on_hand(), "On hand count should have increased to 16")
+
+        item.lost_stock(1, "WHSE002")
+        self.assertEquals(15, item.effective_quantity_on_hand(), "On hand count should have reduced to 15")
+        self.assertEquals(4, item.effective_quantity_on_hand(warehouse="WHSE002"),
+            "On hand count for WHSE002 should have reduced to 4")
+
+        self.assertEquals(2, item.quantity_lost(), "Total lost count should be 2")
+        self.assertEquals(1, item.quantity_lost("WHSE001"), "Total lost count for WHSE001 should be 1")
+        self.assertEquals(1, item.quantity_lost("WHSE002"), "Total lost count for WHSE001 should be 1")
+        self.assertEquals(2, item.quantity_found(), "Total found count should be 2")
+        self.assertEquals(2, item.quantity_found("WHSE001"), "Total found count for WHSE001 should be 2")
+        self.assertEquals(0, item.quantity_found("WHSE002"), "Total found count for WHSE002 should be 0")

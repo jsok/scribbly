@@ -3,7 +3,7 @@ import datetime
 from unittest import TestCase
 from nose.tools import raises
 
-from factories.product import ProductFactory, PriceValueFactory, ProductCollectionFactory
+from domain.tests.factories.product import ProductFactory, PriceValueFactory, ProductCollectionFactory
 
 class ProductTestCase(TestCase):
 

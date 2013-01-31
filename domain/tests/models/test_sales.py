@@ -1,6 +1,6 @@
 from unittest import TestCase, skip
 
-from factories.sales import OrderFactory, PackingListFactory, InvoiceFactory
+from domain.tests.factories.sales import OrderFactory, PackingListFactory, InvoiceFactory
 
 class SalesOrderTestCase(TestCase):
 

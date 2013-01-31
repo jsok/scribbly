@@ -3,7 +3,7 @@ import datetime
 from unittest import TestCase, skip
 from nose.tools import raises
 
-from factories.inventory import InventoryItemFactory
+from domain.tests.factories.inventory import InventoryItemFactory
 from domain.model.inventory.tracker import *
 
 class InventoryStatesTestCase(TestCase):

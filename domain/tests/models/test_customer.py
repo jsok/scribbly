@@ -1,6 +1,7 @@
 from unittest import TestCase, skip
+from nose.tools import raises
 
-from domain.tests.factories.customer import CustomerFactory, ContactFactory
+from domain.tests.factories.customer import CustomerFactory, ContactFactory, AddressFactory
 
 class ContactTestCase(TestCase):
 
@@ -30,6 +31,19 @@ class ContactTestCase(TestCase):
         self.assertIsNotNone(contact.get_phone("OFFICE"), "OFFICE phone entry not found")
 
 
+class AddressTestCase(TestCase):
+
+    def test_address_types(self):
+        shipping = AddressFactory.build(type="SHIPPING")
+        billing = AddressFactory.build(type="billing")
+
+        self.assertTrue(shipping.is_type("SHIPPING"), "Shipping address has wrong type")
+        self.assertTrue(billing.is_type("BILLING"), "Billing address has wrong type")
+
+    @raises(ValueError)
+    def test_address_type_invalid(self):
+        address = AddressFactory.build(type="foo")
+
 
 class CustomerTestCase(TestCase):
 
@@ -55,3 +69,17 @@ class CustomerTestCase(TestCase):
         self.assertEquals(1, len(acct_contacts), "Could not find any accounts contacts")
         self.assertEquals("Accounts", acct_contacts[0].firstname, "Found wrong accounts contacts")
 
+    def test_customer_addresses(self):
+        customer = CustomerFactory.build()
+        shipping = AddressFactory.build(type="SHIPPING")
+        billing = AddressFactory.build(type="BILLING")
+
+        customer.add_address(shipping)
+        customer.add_address(billing)
+        customer.add_address("1 Main St, City")
+
+        shipping_addresses = customer.get_addresses("SHIPPING")
+        billing_addresses = customer.get_addresses("BILLING")
+
+        self.assertEquals(1, len(shipping_addresses), "No shipping addresses found")
+        self.assertEquals(1, len(billing_addresses), "No billing addresses found")

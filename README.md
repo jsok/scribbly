@@ -23,10 +23,12 @@ Run tests:
 Design
 ------
 
-Scribbly ERP follows domain driven design and test driver design principles.
+Scribbly ERP follows domain driven design and test driven design principles.
 
 The domain entity groups are:
 - Inventory: To track movement of stock
+- Warehouses: Group Inventory items at a specific physical or logical location
 - Sales: Documents which describe purchase orders and invoices containing costs of goods sold
 - Products: Details of goods for sale
+- Taxons: Hierarchical grouping of products
 - Customers: Entities which are able to purchase products and be invoiced

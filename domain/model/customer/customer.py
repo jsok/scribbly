@@ -8,13 +8,16 @@ class Customer(Entity):
     A customer is an aggregate root for all contact details and sales history for a single customer.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, discount_tier, tax_category=None):
         self.name = name
         self.contacts = []
         self.addresses = []
 
         self.orders = set()
         self.invoices = set()
+
+        self.discount_tier = discount_tier
+        self.tax_category = tax_category if tax_category else None
 
     def add_contact(self, contact):
         if isinstance(contact, Contact):

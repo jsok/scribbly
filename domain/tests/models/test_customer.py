@@ -83,3 +83,16 @@ class CustomerTestCase(TestCase):
 
         self.assertEquals(1, len(shipping_addresses), "No shipping addresses found")
         self.assertEquals(1, len(billing_addresses), "No billing addresses found")
+
+    def test_customer_sales_history(self):
+        customer = CustomerFactory.build()
+
+        customer.submit_order("ORD001")
+        customer.submit_order("ORD002")
+        customer.submit_invoice("INV001")
+
+        self.assertTrue("ORD001" in customer.orders, "ORD001 not found in customer sales history")
+        self.assertTrue("ORD002" in customer.orders, "ORD002 not found in customer sales history")
+        self.assertTrue("INV001" in customer.invoices, "INV001 not found in customer sales history")
+
+        self.assertFalse("INVXXX" in customer.invoices, "Non-existant invoice found in customer sales history")

@@ -13,6 +13,9 @@ class Customer(Entity):
         self.contacts = []
         self.addresses = []
 
+        self.orders = set()
+        self.invoices = set()
+
     def add_contact(self, contact):
         if isinstance(contact, Contact):
             self.contacts.append(contact)
@@ -26,3 +29,9 @@ class Customer(Entity):
 
     def get_addresses(self, type):
         return [address for address in self.addresses if address.is_type(type)]
+
+    def submit_order(self, order_id):
+        self.orders.add(order_id)
+
+    def submit_invoice(self, invoice_id):
+        self.invoices.add(invoice_id)

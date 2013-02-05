@@ -10,6 +10,7 @@ class ProductFactory(factory.Factory):
     sku = factory.Sequence(lambda n: 'PROD%03d'% n, type=int)
     name = factory.Sequence(lambda n: 'Product %03d'% n, type=int)
     price = PriceValue(100.00, datetime.datetime.now())
+    price_category = "MANF-A"
 
 class PriceValueFactory(factory.Factory):
     FACTORY_FOR = PriceValue

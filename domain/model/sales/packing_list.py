@@ -1,7 +1,6 @@
 import operator
 
 from domain.shared.entity import  Entity
-from domain.model.sales.line_item import LineItem
 
 class PackingList(Entity):
     def __init__(self, id, date, packer=None, items=None):
@@ -23,7 +22,7 @@ class PackingList(Entity):
         if item:
             item.allocated = quantity
 
-    class PackingListItem(LineItem):
+    class PackingListItem(object):
         def __init__(self, sku):
             self.sku = sku
             self.allocated = 0

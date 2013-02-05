@@ -26,15 +26,13 @@ class Product(Entity):
 
         self.price_history.append(price)
 
-    def get_price(self, date):
+    def get_price(self, date=None):
+        date = date if date else datetime.now()
         price = self.price_history[date]
         return price.value if price else None
 
     def get_prices_between(self, start, end):
         return map(lambda p: p.value, self.price_history[start:end])
-
-    def get_current_price(self):
-        return self.get_price(datetime.now())
 
     def set_as_master_of_collection(self, collection):
         if isinstance(collection, ProductCollection):

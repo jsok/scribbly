@@ -25,7 +25,7 @@ class ProductPriceTestCase(TestCase):
     def test_product_current_price(self):
         p = ProductFactory.build(price=PriceValueFactory.build(price=100.00))
 
-        self.assertEquals(100.00, p.get_current_price(), "Current price incorrect")
+        self.assertEquals(100.00, p.get_price(), "Current price incorrect")
 
     def test_product_current_price_with_history(self):
         now = datetime.datetime.now()
@@ -37,16 +37,16 @@ class ProductPriceTestCase(TestCase):
         last_week = now - datetime.timedelta(weeks=1)
         p.set_price(PriceValueFactory.build(price=130.00, date=last_week))
 
-        self.assertEquals(100.00, p.get_current_price(), "Current price incorrect")
-        self.assertEquals(150.00, p.get_price(yesterday), "Yesterday price incorrect")
-        self.assertEquals(150.00, p.get_price(now - datetime.timedelta(hours=1)), "Price an hour ago incorrect")
-        self.assertEquals(130.00, p.get_price(now - datetime.timedelta(days=3)), "Price 3 days ago incorrect")
+        self.assertEquals(100.00, p.get_price(), "Current price incorrect")
+        self.assertEquals(150.00, p.get_price(date=yesterday), "Yesterday price incorrect")
+        self.assertEquals(150.00, p.get_price(date=now - datetime.timedelta(hours=1)), "Price an hour ago incorrect")
+        self.assertEquals(130.00, p.get_price(date=now - datetime.timedelta(days=3)), "Price 3 days ago incorrect")
 
         # Update price again, delta should be small
         p.set_price(PriceValueFactory.build(price=90.00, date=datetime.datetime.now()))
-        self.assertEquals(90.00, p.get_current_price(), "Updated current price incorrect")
+        self.assertEquals(90.00, p.get_price(), "Updated current price incorrect")
 
-        self.assertIsNone(p.get_price(now - datetime.timedelta(weeks=2)), "Price 2 weeks ago no undefined")
+        self.assertIsNone(p.get_price(date=now - datetime.timedelta(weeks=2)), "Price 2 weeks ago no undefined")
 
 class ProductCollectionTestCase(TestCase):
 

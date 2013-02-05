@@ -12,21 +12,14 @@ class Invoice(Entity):
         self.line_items = line_items if line_items else []
         self.finalised = False
 
+    def tax(self):
+        return reduce(operator.add, [i.tax() for i in self.line_items], 0.00)
+
+    def subtotal(self):
+        return reduce(operator.add, [i.subtotal() for i in self.line_items], 0.00)
+
     def total_amount(self):
-        return reduce(operator.add, [i.amount() for i in self.line_items], 0.00)
+        return reduce(operator.add, [i.total() for i in self.line_items], 0.00)
 
-    def add_line_item(self, sku, quantity, price, discount):
-        self.line_items.append(self.InvoiceLineItem(sku, quantity, price, discount))
-
-    class InvoiceLineItem(LineItem):
-        """
-        Invoice specific line item.
-        """
-        def __init__(self, sku, quantity, price, discount):
-            self.sku = sku
-            self.quantity = quantity
-            self.price = price
-            self.discount = discount
-
-        def amount(self):
-            return max(0, (self.price * (1.0 - self.discount)) * self.quantity)
+    def add_line_item(self, sku, quantity, price, discount, tax_rate=None):
+        self.line_items.append(LineItem(sku, quantity, price, discount, tax_rate=tax_rate))

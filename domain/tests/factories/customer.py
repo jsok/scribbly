@@ -6,6 +6,8 @@ class CustomerFactory(factory.Factory):
     FACTORY_FOR = customer.Customer
 
     name = "Customer Name"
+    discount_tier = "GRADE-A"
+    tax_category = "GST"
 
 class ContactFactory(factory.Factory):
     FACTORY_FOR = contact.Contact

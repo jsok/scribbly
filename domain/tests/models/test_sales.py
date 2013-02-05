@@ -100,6 +100,24 @@ class SalesInvoiceTestCase(TestCase):
         self.assertEquals(2, len(invoice.line_items), "Both line items were not added correctly")
         self.assertEquals(100.00, invoice.total_amount(), "Incorrect invoice amount calculated")
 
+
+    def test_invoice_with_single_tax_rate(self):
+        invoice = InvoiceFactory.build()
+        invoice.add_line_item("PROD000", 1, 100.00, 0.20, tax_rate=0.10)
+
+        self.assertEquals(8.00, invoice.tax(), "Incorrect amount of tax calculated")
+        self.assertEquals(80.00, invoice.subtotal(), "Incorrect subtotal calculated")
+        self.assertEquals(88.00, invoice.total_amount(), "Incorrect total calculated")
+
+    def test_invoice_with_multiple_tax_rates(self):
+        invoice = InvoiceFactory.build()
+        invoice.add_line_item("PROD000", 1, 100.00, 0.20, tax_rate=0.10)
+        invoice.add_line_item("PROD001", 1, 10.00, 0.10, tax_rate=None)
+
+        self.assertEquals(8.00, invoice.tax(), "Incorrect amount of tax calculated")
+        self.assertEquals(89.00, invoice.subtotal(), "Incorrect subtotal calculated")
+        self.assertEquals(97.00, invoice.total_amount(), "Incorrect total calculated")
+
     def test_invoice_with_invalid_discount_line_item(self):
         invoice = InvoiceFactory.build()
         invoice.add_line_item("PROD000", 1, 1.00, 2.0) # 200% discount

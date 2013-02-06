@@ -9,28 +9,35 @@ class PackingList(Entity):
         self.packer = packer if packer else None
         self.line_items = items if items else {}
 
-    def add_item(self, sku, quantity, order_id):
+    def request_item(self, sku, quantity, order_id):
         item = self.line_items.get(sku, self.PackingListItem(sku))
-        item.add_entry(order_id, quantity)
+        item.request(order_id, quantity)
         self.line_items.update({sku: item})
 
     def find_item(self, sku):
         return self.line_items.get(sku)
 
-    def allocate_item(self, sku, quantity):
+    def allocate_item(self, sku, quantity, warehouse):
         item = self.find_item(sku)
         if item:
-            item.allocated = quantity
+            item.allocate(warehouse, quantity)
 
     class PackingListItem(object):
         def __init__(self, sku):
             self.sku = sku
-            self.allocated = 0
-            self.order_entries = []
+            self._allocated = []
+            self._order_entries = []
 
-        def add_entry(self, order_id, quantity):
-            self.order_entries.append((order_id, quantity))
+        def request(self, order_id, quantity):
+            self._order_entries.append((order_id, quantity))
+
+        def allocate(self, warehouse, quantity):
+            self._allocated.append((warehouse, quantity))
 
         @property
-        def quantity(self):
-            return reduce(operator.add, [qty for _, qty in self.order_entries], 0)
+        def quantity_requested(self):
+            return reduce(operator.add, [qty for _, qty in self._order_entries], 0)
+
+        @property
+        def quantity_allocated(self):
+            return reduce(operator.add, [qty for _, qty in self._allocated], 0)

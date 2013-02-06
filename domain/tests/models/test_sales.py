@@ -40,40 +40,40 @@ class PackingListTestCase(TestCase):
 
     def test_packing_list_add_item(self):
         pl = PackingListFactory.build()
-        pl.add_item("PROD000", 1, "ORD000")
+        pl.request_item("PROD000", 1, "ORD000")
 
         product = pl.find_item("PROD000")
-        self.assertEquals(1, product.quantity, "Incorrect number of items for product in packing list")
+        self.assertEquals(1, product.quantity_requested, "Incorrect number of items for product in packing list")
 
     def test_packing_list_item_from_multiple_orders(self):
         pl = PackingListFactory.build()
-        pl.add_item("PROD000", 1, "ORD000")
-        pl.add_item("PROD000", 1, "ORD001")
-        pl.add_item("PROD001", 3, "ORD000")
-        pl.add_item("PROD002", 7, "ORD002")
+        pl.request_item("PROD000", 1, "ORD000")
+        pl.request_item("PROD000", 1, "ORD001")
+        pl.request_item("PROD001", 3, "ORD000")
+        pl.request_item("PROD002", 7, "ORD002")
 
-        self.assertEquals(2, pl.find_item("PROD000").quantity,
+        self.assertEquals(2, pl.find_item("PROD000").quantity_requested,
             "Incorrect number of items for product in packing list")
-        self.assertEquals(3, pl.find_item("PROD001").quantity,
+        self.assertEquals(3, pl.find_item("PROD001").quantity_requested,
             "Incorrect number of items for product in packing list")
-        self.assertEquals(7, pl.find_item("PROD002").quantity,
+        self.assertEquals(7, pl.find_item("PROD002").quantity_requested,
             "Incorrect number of items for product in packing list")
 
     def test_packing_list_all_items_available(self):
         pl = PackingListFactory.build()
-        pl.add_item("PROD000", 1, "ORD000")
+        pl.request_item("PROD000", 1, "ORD000")
 
-        pl.allocate_item("PROD000", 1)
+        pl.allocate_item("PROD000", 1, "WHSE001")
 
-        self.assertEquals(1, pl.find_item("PROD000").allocated, "Incorrect number of items were report for product")
+        self.assertEquals(1, pl.find_item("PROD000").quantity_allocated, "Incorrect number of items were report for product")
 
     def test_packing_list_report_item_not_in_list(self):
         pl = PackingListFactory.build()
-        pl.add_item("PROD000", 1, "ORD000")
+        pl.request_item("PROD000", 1, "ORD000")
 
-        pl.allocate_item("PRODFAKE", 1)
+        pl.allocate_item("PRODFAKE", 1, "WHSE001")
 
-        self.assertEquals(0, pl.find_item("PROD000").allocated, "Incorrect number of items were report for product")
+        self.assertEquals(0, pl.find_item("PROD000").quantity_allocated, "Incorrect number of items were report for product")
         self.assertIsNone(pl.find_item("PRODFAKE"), "Fake product should not be in packing list")
 
 class SalesInvoiceTestCase(TestCase):

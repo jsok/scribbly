@@ -6,6 +6,7 @@ class TrackingStateMachine(object):
     def __init__(self):
         self.states = {}
         self.transitions = {}
+        self.actions = {}
 
     def state(self, name):
         return self.states.get(name, None)
@@ -49,6 +50,30 @@ class TrackingStateMachine(object):
         else:
             raise ValueError()
 
+    def action(self, name, args):
+        """
+        Perform an action which is limited in scope within the state.
+        Args is a dict of arguments to pass to the action, validation is the responsibility of the state.
+        """
+        state = self.actions.get(name, None)
+        if not state:
+            return lambda: None
+        action = getattr(state, name)
+        return functools.partial(action, args)
+
+    def add_action(self, name, state):
+        """
+        Add an action to a state.
+        The name is taken to be a method on the state.
+        """
+        state = self.states.get(state, None)
+        if not state:
+            raise ValueError()
+
+        if hasattr(state, name):
+            self.actions.update({ name: state })
+        else:
+            raise ValueError()
 
 class TrackingState(object):
 
@@ -109,7 +134,6 @@ class OnHandState(TrackingState):
                 (lambda i: i.warehouse is not None),
                 ])
 
-
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.OnHandItem)
         self.items = {}
@@ -147,23 +171,25 @@ class CommittedState(TrackingState):
         """
         When an order is acknowledged, it will commit items from the inventory.
         A committed item affects on-hand count and will eventually be shipped.
+        As a safe-guard, a quantity can be marked as unverified until a physical count can confirm its existence.
         """
         def __init__(self, properties):
             import datetime
 
             super(self.__class__, self).__init__()
             self.quantity = properties.get("quantity", 0)
+            self.unverified_quantity = properties.get("unverified_quantity", 0)
             self.warehouse = properties.get("warehouse", None)
             self.date = properties.get("date", datetime.datetime.now())
             self.order_id = properties.get("order_id", None)
 
             self.validations.extend([
                 (lambda i: i.quantity > 0),
+                (lambda i: i.unverified_quantity >= 0),
                 (lambda i: i.warehouse is not None),
                 (lambda i: i.date is not None),
                 (lambda i: i.order_id is not None),
                 ])
-
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.CommittedItem)
@@ -179,15 +205,28 @@ class CommittedState(TrackingState):
     def get(self, order_id):
         return self.items.get(order_id, None)
 
+    def get_unverified(self, warehouse):
+        unverified_items = []
+
+        for warehouse_dict in self.items.values():
+            if warehouse_dict.has_key(warehouse):
+                item = warehouse_dict.get(warehouse)
+                if item.unverified_quantity > 0:
+                    unverified_items.append(item)
+
+        return unverified_items
+
     def quantity(self, warehouse=None):
         quantity = 0
 
         for warehouse_dict in self.items.values():
             if warehouse and warehouse_dict.has_key(warehouse):
                 quantity += warehouse_dict.get(warehouse).quantity
+                quantity += warehouse_dict.get(warehouse).unverified_quantity
             elif warehouse is None:
                 for item in warehouse_dict.values():
                     quantity += item.quantity
+                    quantity += item.unverified_quantity
 
         return quantity
 
@@ -212,6 +251,30 @@ class CommittedState(TrackingState):
         self._reduce_quantity_for(from_item.order_id, from_item.warehouse, from_item.quantity)
         to_state.track(to_item)
 
+    def verify(self, item):
+        verified_quantity = item.get("quantity", None)
+        if not verified_quantity:
+            raise KeyError()
+
+        for warehouse_dict in self.items.values():
+            # TODO: Verify oldest orders first
+            item = warehouse_dict.get(item["warehouse"], None)
+            if item and verified_quantity > 0:
+                verified_quantity -= item.quantity
+                qty = min(verified_quantity, item.unverified_quantity)
+                item.unverified_quantity -= qty
+                item.quantity += qty
+
+                # Consume the quantity and continue
+                verified_quantity -= qty
+
+    def verify_out_of_stock(self, to_state, from_item, to_item):
+        warehouses = self.items.get(from_item.order_id)
+        item = warehouses.get(from_item.warehouse)
+        item.unverified_quantity -= from_item.unverified_quantity
+
+        to_state.track(to_item)
+
 
 class BackorderState(TrackingState):
 
@@ -233,7 +296,6 @@ class BackorderState(TrackingState):
                 (lambda i: i.order_id is not None),
                 (lambda i: i.allocated >= 0),
                 ])
-
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.BackorderedItem)
@@ -363,17 +425,17 @@ class PurchaseOrderState(TrackingState):
 
         to_state.track(to_item)
 
-    def cancel(self, purchase_order_id):
+    def cancel_purchase_order(self, args):
         # We don't usually allow this, but there is no logical transition for it
-        self.items.pop(purchase_order_id)
+        if args.has_key("purchase_order_id"):
+            self.items.pop(args["purchase_order_id"])
 
 
 class LostAndFoundState(TrackingState):
 
     class LostAndFoundItem(TrackingState.TrackingItem):
         """
-        A fulfilled item has been removed from the warehouse and sent to a customer as part of a delivery.
-        This item tracks when it was fulfilled and how.
+        Lost and Found items, due to mis-count or other mistake.
         """
         def __init__(self, properties):
             super(self.__class__, self).__init__()

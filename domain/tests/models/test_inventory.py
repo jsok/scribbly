@@ -10,12 +10,8 @@ class InventoryStatesTestCase(TestCase):
 
     def setUp(self):
         self.machine = TrackingStateMachine()
-
-        # Setup states
         self.machine.add_state(OnHandState("OnHand"))
         self.machine.add_state(CommittedState("Committed"))
-
-        # Add transitions between states
         self.machine.add_transition("commit", "OnHand", "Committed")
 
     @raises(TypeError)
@@ -31,7 +27,24 @@ class InventoryStatesTestCase(TestCase):
         self.machine.add_transition("foobar", "OnHand", "Committed")
 
     def test_perform_invalid_transition(self):
-        self.machine.transition("foobar", None, None)
+        transition = self.machine.transition("foobar", None, None)
+        self.assertIsInstance(transition, type(lambda: None), "Transition was not a null op")
+
+    @raises(ValueError)
+    def test_invalid_action(self):
+        self.machine.add_action("foobar", "OnHand")
+
+    def test_perform_invalid_action(self):
+        action = self.machine.action("foobar", {})
+        self.assertIsInstance(action, type(lambda: None), "Action was not a null op")
+
+    def test_perform_action(self):
+        # Add a dummy action which always returns True
+        self.machine.state("OnHand").foo = lambda x: True
+        self.machine.add_action("foo", "OnHand")
+
+        action_func = self.machine.action("foo", {})
+        self.assertTrue(action_func(), "Action did not execute correctly")
 
     def test_transition_commit(self):
         # Test begins here
@@ -92,7 +105,7 @@ class InventoryCommitTestCase(TestCase):
 
         committed_items = item.find_committed_for_order("ORD000")
 
-        self.assertFalse(committed_items == {}, "No items were committed")
+        self.assertIsNotNone(committed_items, "No items were committed")
         self.assertEqual(1, item.quantity_committed(), "Not exactly one item was committed")
         self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "Only one item should have been committed")
 
@@ -117,7 +130,7 @@ class InventoryCommitTestCase(TestCase):
 
         committed_items = item.find_committed_for_order("ORD001")
 
-        self.assertFalse(committed_items == {}, "No items were committed")
+        self.assertIsNotNone(committed_items, "No items were committed")
         self.assertEqual(3, item.quantity_committed(), "Not exactly three items were committed")
         self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "Only two items should have been committed")
         self.assertEquals(1, item.quantity_committed(warehouse="WHSE002"), "Only one item should have been committed")

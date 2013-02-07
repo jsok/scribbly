@@ -4,8 +4,8 @@ import operator
 from domain.shared.entity import Entity
 
 from domain.model.inventory.tracker import TrackingStateMachine
-from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, FulfilledState, \
-    PurchaseOrderState, LostAndFoundState
+from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, \
+    FulfilledState, PurchaseOrderState, LostAndFoundState
 
 class InventoryItem(Entity):
     """
@@ -25,8 +25,11 @@ class InventoryItem(Entity):
     - Track lost & found stock
     """
 
-    def __init__(self, sku):
+    def __init__(self, sku, on_hand_buffer=None):
         self.sku = sku
+
+        # Minimum on hand quantity before we need to physically verify stock levels, off by default
+        self.on_hand_buffer = on_hand_buffer if on_hand_buffer else 0
 
         self.tracker = TrackingStateMachine()
         self.tracker.add_state(OnHandState("OnHand"))
@@ -43,11 +46,14 @@ class InventoryItem(Entity):
         self.tracker.add_transition("fulfill_backorder", "Backorder", "Committed")
         self.tracker.add_transition("cancel_backorder", "Backorder", "OnHand")
 
+        self.tracker.add_action("verify", "Committed")
+        self.tracker.add_transition("verify_out_of_stock", "Committed", "Backorder")
         self.tracker.add_transition("backorder_commitment", "Committed", "Backorder")
         self.tracker.add_transition("revert", "Committed", "OnHand")
         self.tracker.add_transition("fulfill", "Committed", "Fulfilled")
 
         self.tracker.add_transition("delivery", "PurchaseOrder", "OnHand")
+        self.tracker.add_action("cancel_purchase_order", "PurchaseOrder")
 
         self.tracker.add_transition("lost", "OnHand", "Lost")
         self.tracker.add_transition("found", "Found", "OnHand")
@@ -55,6 +61,7 @@ class InventoryItem(Entity):
         # Some shortcut attributes
         self.on_hand = self.tracker.state("OnHand")
         self.committed = self.tracker.state("Committed")
+        self.verification = self.tracker.state("Verify")
         self.backorders = self.tracker.state("Backorder")
         self.fulfilled = self.tracker.state("Fulfilled")
         self.purchase_orders = self.tracker.state("PurchaseOrder")
@@ -83,24 +90,22 @@ class InventoryItem(Entity):
         return self.committed.quantity(warehouse=warehouse)
 
     def commit(self, quantity, warehouse, order_id):
-        # Commit as many items from the specified warehouse as possible
-        commit_quantity = min(self.effective_quantity_on_hand(warehouse=warehouse), quantity)
+        effective_quantity = self.effective_quantity_on_hand(warehouse=warehouse)
+
+        maximum_verified_quantity = effective_quantity - self.on_hand_buffer
+        verified_quantity = min(maximum_verified_quantity, quantity)
+        unverified_quantity = max(0, effective_quantity - maximum_verified_quantity)
 
         self.tracker.transition("commit",
-            {"quantity": commit_quantity, "warehouse": warehouse},
-            {"quantity": commit_quantity, "warehouse": warehouse,
+            {"quantity": verified_quantity + unverified_quantity, "warehouse": warehouse},
+            {"quantity": verified_quantity, "unverified_quantity": unverified_quantity, "warehouse": warehouse,
              "order_id": order_id, "date": datetime.now()}
         )()
 
-        # Create a backorder for whatever cannot be committed
-        backordered_quantity = max(0, quantity - commit_quantity)
-
-        self.backorders.track({
-            "quantity": backordered_quantity,
-            "date": datetime.now(),
-            "order_id": order_id,
-            "allocated": 0}
-        )
+        # Create a backorder for quantity overflow
+        backordered_quantity = max(0, quantity - effective_quantity)
+        if backordered_quantity > 0:
+            self.backorders.track({"quantity": backordered_quantity, "date": datetime.now(), "order_id": order_id})
 
     def fulfill_commitment(self, quantity, warehouse, order_id, invoice_id):
         commitment = self.find_committed_for_order(order_id)
@@ -133,6 +138,32 @@ class InventoryItem(Entity):
             {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()},
             {"quantity": quantity, "warehouse": warehouse}
         )()
+
+    def verify_stock_level(self, quantity, warehouse):
+        expected_quantity = self.physical_quantity_on_hand(warehouse=warehouse)
+        now = datetime.now()
+
+        # Verify the quantity which was physically counted
+        self.tracker.action("verify", {"quantity": quantity, "warehouse": warehouse})()
+
+        # Propagate any lost stock into backorders
+        if quantity < expected_quantity:
+            for item in self.committed.get_unverified(warehouse):
+                self.tracker.transition("verify_out_of_stock",
+                    {"quantity": item.unverified_quantity, "warehouse": warehouse, "order_id": item.order_id,
+                        "date": now},
+                    {"quantity": item.unverified_quantity, "warehouse": warehouse, "order_id": item.order_id,
+                        "date": now}
+                )()
+
+            # Declare lost quantity
+            lost_quantity = expected_quantity - quantity
+            self.lost.track({"quantity": lost_quantity, "warehouse": warehouse, "date": now})
+
+        elif expected_quantity < quantity:
+            found_quantity = quantity - expected_quantity
+            self.found_stock(found_quantity, warehouse)
+
 
     # Backorder methods
 
@@ -208,7 +239,7 @@ class InventoryItem(Entity):
         )()
 
     def cancel_purchase_order(self, purchase_order_id):
-        self.purchase_orders.cancel(purchase_order_id)
+        self.tracker.action("cancel_purchase_order", {"purchase_order_id": purchase_order_id})()
 
     # Lost and Found methods
 
@@ -219,14 +250,12 @@ class InventoryItem(Entity):
         return self.found.quantity(warehouse=warehouse)
 
     def lost_stock(self, quantity, warehouse):
-
         self.tracker.transition("lost",
             {"quantity": quantity, "warehouse": warehouse},
             {"quantity": quantity, "warehouse": warehouse, "date": datetime.now()}
         )()
 
     def found_stock(self, quantity, warehouse):
-
         self.tracker.transition("found",
             {"quantity": quantity, "warehouse": warehouse, "date": datetime.now()},
             {"quantity": quantity, "warehouse": warehouse}

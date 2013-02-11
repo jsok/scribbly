@@ -150,7 +150,7 @@ class OnHandState(TrackingState):
 
     def _reduce_quantity_for(self, warehouse, quantity):
         current_quantity = self.items.get(warehouse)
-        self.items.update({ warehouse: current_quantity - quantity })
+        self.items.update({ warehouse: max(0, current_quantity - quantity) })
 
     def commit(self, to_state, from_item, to_item):
         self._reduce_quantity_for(from_item.warehouse, from_item.quantity)
@@ -253,25 +253,35 @@ class CommittedState(TrackingState):
 
     def verify(self, item):
         verified_quantity = item.get("quantity", None)
-        if not verified_quantity:
+        if verified_quantity is None:
             raise KeyError()
 
         for warehouse_dict in self.items.values():
             # TODO: Verify oldest orders first
             item = warehouse_dict.get(item["warehouse"], None)
-            if item and verified_quantity > 0:
-                verified_quantity -= item.quantity
-                qty = min(verified_quantity, item.unverified_quantity)
-                item.unverified_quantity -= qty
-                item.quantity += qty
+            if not item:
+                continue
 
-                # Consume the quantity and continue
-                verified_quantity -= qty
+            if item.quantity <= verified_quantity:
+                verified_quantity -= item.quantity
+
+                if item.unverified_quantity <= verified_quantity:
+                    verified_quantity -= item.unverified_quantity
+                    item.quantity += item.unverified_quantity
+                    item.unverified_quantity = 0
+                else:
+                    verified_quantity = 0
+
+            else:
+                # Move falsely committed quantity to unverified
+                item.unverified_quantity += max(0, item.quantity - verified_quantity)
+                item.quantity = verified_quantity
+                verified_quantity = 0
 
     def verify_out_of_stock(self, to_state, from_item, to_item):
         warehouses = self.items.get(from_item.order_id)
         item = warehouses.get(from_item.warehouse)
-        item.unverified_quantity -= from_item.unverified_quantity
+        item.unverified_quantity -= from_item.quantity
 
         to_state.track(to_item)
 

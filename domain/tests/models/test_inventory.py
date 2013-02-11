@@ -201,6 +201,107 @@ class InventoryCommitNoBufferTestCase(TestCase):
         self.assertEquals(2, item.effective_quantity_on_hand(), "2 should now be in stock")
 
 
+class InventoryCommitWithBufferTestCase(TestCase):
+
+    def test_onhand_honours_buffer(self):
+        item = InventoryItemFactory.build(on_hand_buffer=1)
+        item.enter_stock_on_hand(2, "WHSE001")
+
+        item.commit(2, "WHSE001", "ORD001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+
+    def test_commit_and_verify(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(4, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+
+        # Verify the original stock level was correct
+        item.verify_stock_level(5, "WHSE001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(4, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Item quantities do not reflect verification count")
+
+    def test_commit_and_verify_with_backorder(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(6, "WHSE001", "ORD001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(2, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.quantity_backordered("ORD001"), "Item was not backordered")
+
+        # Verify the original stock level was correct
+        item.verify_stock_level(5, "WHSE001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(5, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(1, item.quantity_backordered("ORD001"), "Backorder should not have been modified")
+
+    def test_commit_with_verify_discrepancy(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(4, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+
+        # We could only find 3, 2 went missing!
+        item.verify_stock_level(3, "WHSE001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(1, item.quantity_backordered("ORD001"), "Backorder should have been created")
+        self.assertEquals(2, item.quantity_lost(), "Incorrect number of lost items tracked")
+
+    def test_commit_with_major_verify_discrepancy(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(4, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+
+        # All 5 went missing!
+        item.verify_stock_level(0, "WHSE001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(4, item.quantity_backordered("ORD001"), "Backorder should have been created")
+        self.assertEquals(5, item.quantity_lost(), "Incorrect number of lost items tracked")
+
+
 class InventoryBackordersTestCase(TestCase):
 
     def test_fulfill_backorder_partial(self):

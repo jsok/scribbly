@@ -159,7 +159,7 @@ class InventoryItem(Entity):
 
             # Declare lost quantity
             lost_quantity = expected_quantity - quantity
-            self.lost.track({"quantity": lost_quantity, "warehouse": warehouse, "date": now})
+            self.lost_stock(lost_quantity, warehouse)
 
         elif expected_quantity < quantity:
             found_quantity = quantity - expected_quantity

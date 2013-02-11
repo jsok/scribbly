@@ -89,7 +89,7 @@ class InventoryOnHandTestCase(TestCase):
 
         self.assertEquals(0, item.effective_quantity_on_hand(), "Incorrect on hand count set")
 
-class InventoryCommitTestCase(TestCase):
+class InventoryCommitNoBufferTestCase(TestCase):
 
     def test_commit_less_than_on_hand(self):
         item = InventoryItemFactory.build()

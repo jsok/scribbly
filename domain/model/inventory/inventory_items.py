@@ -92,20 +92,21 @@ class InventoryItem(Entity):
     def commit(self, quantity, warehouse, order_id):
         effective_quantity = self.effective_quantity_on_hand(warehouse=warehouse)
 
-        maximum_verified_quantity = effective_quantity - self.on_hand_buffer
-        verified_quantity = min(maximum_verified_quantity, quantity)
-        unverified_quantity = max(0, effective_quantity - maximum_verified_quantity)
+        # Create a backorder for quantity we know is impossible to commit
+        backordered_quantity = max(0, quantity - effective_quantity)
+        if backordered_quantity > 0:
+            self.backorders.track({"quantity": backordered_quantity, "date": datetime.now(), "order_id": order_id})
+
+        maximum_committable_quantity = quantity - backordered_quantity
+        maximum_verified_quantity = max(0, effective_quantity - self.on_hand_buffer)
+        verified_quantity = min(maximum_verified_quantity, maximum_committable_quantity)
+        unverified_quantity = max(0, maximum_committable_quantity - maximum_verified_quantity)
 
         self.tracker.transition("commit",
             {"quantity": verified_quantity + unverified_quantity, "warehouse": warehouse},
             {"quantity": verified_quantity, "unverified_quantity": unverified_quantity, "warehouse": warehouse,
              "order_id": order_id, "date": datetime.now()}
         )()
-
-        # Create a backorder for quantity overflow
-        backordered_quantity = max(0, quantity - effective_quantity)
-        if backordered_quantity > 0:
-            self.backorders.track({"quantity": backordered_quantity, "date": datetime.now(), "order_id": order_id})
 
     def fulfill_commitment(self, quantity, warehouse, order_id, invoice_id):
         commitment = self.find_committed_for_order(order_id)

@@ -220,7 +220,7 @@ class CommittedState(TrackingState):
         quantity = 0
 
         for warehouse_dict in self.items.values():
-            if warehouse and warehouse_dict.has_key(warehouse):
+            if warehouse in warehouse_dict:
                 quantity += warehouse_dict.get(warehouse).quantity
                 quantity += warehouse_dict.get(warehouse).unverified_quantity
             elif warehouse is None:

@@ -56,7 +56,7 @@ class TrackingStateMachine(object):
         Args is a dict of arguments to pass to the action, validation is the responsibility of the state.
         """
         state = self.actions.get(name, None)
-        if not state:
+        if not state: # pragma: no cover
             return lambda: None
         action = getattr(state, name)
         return functools.partial(action, args)
@@ -208,11 +208,10 @@ class CommittedState(TrackingState):
     def get_unverified(self, warehouse):
         unverified_items = []
 
-        for warehouse_dict in self.items.values():
-            if warehouse_dict.has_key(warehouse):
-                item = warehouse_dict.get(warehouse)
-                if item.unverified_quantity > 0:
-                    unverified_items.append(item)
+        for warehouse_dict in [w for w in self.items.values() if warehouse in w]:
+            item = warehouse_dict.get(warehouse)
+            if item.unverified_quantity > 0: # pragma: no cover
+                unverified_items.append(item)
 
         return unverified_items
 
@@ -437,8 +436,9 @@ class PurchaseOrderState(TrackingState):
 
     def cancel_purchase_order(self, args):
         # We don't usually allow this, but there is no logical transition for it
-        if args.has_key("purchase_order_id"):
-            self.items.pop(args["purchase_order_id"])
+        if "purchase_order_id" not in args:
+            return
+        self.items.pop(args["purchase_order_id"])
 
 
 class LostAndFoundState(TrackingState):

@@ -165,7 +165,6 @@ class InventoryItem(Entity):
             found_quantity = quantity - expected_quantity
             self.found_stock(found_quantity, warehouse)
 
-
     # Backorder methods
 
     def find_backorder_for_order(self, order_id):

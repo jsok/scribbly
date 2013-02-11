@@ -301,6 +301,21 @@ class InventoryCommitWithBufferTestCase(TestCase):
         self.assertEquals(4, item.quantity_backordered("ORD001"), "Backorder should have been created")
         self.assertEquals(5, item.quantity_lost(), "Incorrect number of lost items tracked")
 
+    def test_commit_with_overstocked_verify(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(4, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+
+        # We found an extra to make 6
+        item.verify_stock_level(6, "WHSE001")
+
 
 class InventoryBackordersTestCase(TestCase):
 

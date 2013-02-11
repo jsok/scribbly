@@ -10,12 +10,8 @@ class InventoryStatesTestCase(TestCase):
 
     def setUp(self):
         self.machine = TrackingStateMachine()
-
-        # Setup states
         self.machine.add_state(OnHandState("OnHand"))
         self.machine.add_state(CommittedState("Committed"))
-
-        # Add transitions between states
         self.machine.add_transition("commit", "OnHand", "Committed")
 
     @raises(TypeError)
@@ -31,7 +27,24 @@ class InventoryStatesTestCase(TestCase):
         self.machine.add_transition("foobar", "OnHand", "Committed")
 
     def test_perform_invalid_transition(self):
-        self.machine.transition("foobar", None, None)
+        transition = self.machine.transition("foobar", None, None)
+        self.assertIsInstance(transition, type(lambda: None), "Transition was not a null op")
+
+    @raises(ValueError)
+    def test_invalid_action(self):
+        self.machine.add_action("foobar", "OnHand")
+
+    def test_perform_invalid_action(self):
+        action = self.machine.action("foobar", {})
+        self.assertIsInstance(action, type(lambda: None), "Action was not a null op")
+
+    def test_perform_action(self):
+        # Add a dummy action which always returns True
+        self.machine.state("OnHand").foo = lambda x: True
+        self.machine.add_action("foo", "OnHand")
+
+        action_func = self.machine.action("foo", {})
+        self.assertTrue(action_func(), "Action did not execute correctly")
 
     def test_transition_commit(self):
         # Test begins here
@@ -76,7 +89,7 @@ class InventoryOnHandTestCase(TestCase):
 
         self.assertEquals(0, item.effective_quantity_on_hand(), "Incorrect on hand count set")
 
-class InventoryCommitTestCase(TestCase):
+class InventoryCommitNoBufferTestCase(TestCase):
 
     def test_commit_less_than_on_hand(self):
         item = InventoryItemFactory.build()
@@ -92,7 +105,7 @@ class InventoryCommitTestCase(TestCase):
 
         committed_items = item.find_committed_for_order("ORD000")
 
-        self.assertFalse(committed_items == {}, "No items were committed")
+        self.assertIsNotNone(committed_items, "No items were committed")
         self.assertEqual(1, item.quantity_committed(), "Not exactly one item was committed")
         self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "Only one item should have been committed")
 
@@ -117,7 +130,7 @@ class InventoryCommitTestCase(TestCase):
 
         committed_items = item.find_committed_for_order("ORD001")
 
-        self.assertFalse(committed_items == {}, "No items were committed")
+        self.assertIsNotNone(committed_items, "No items were committed")
         self.assertEqual(3, item.quantity_committed(), "Not exactly three items were committed")
         self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "Only two items should have been committed")
         self.assertEquals(1, item.quantity_committed(warehouse="WHSE002"), "Only one item should have been committed")
@@ -180,10 +193,128 @@ class InventoryCommitTestCase(TestCase):
         item.revert(100, "WHSEXXX", "ORD001")
         item.revert(100, "WHSE001", "ORDXXX")
         item.revert(100, "WHSEXXX", "ORDXXX")
+        # Over-revert should not pass
+        item.revert(10, "WHSE001", "ORD001")
 
         self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "Only 1 commitment should remain after " +
                                                                            "revert")
         self.assertEquals(2, item.effective_quantity_on_hand(), "2 should now be in stock")
+
+
+class InventoryCommitWithBufferTestCase(TestCase):
+
+    def test_onhand_honours_buffer(self):
+        item = InventoryItemFactory.build(on_hand_buffer=1)
+        item.enter_stock_on_hand(2, "WHSE001")
+
+        item.commit(2, "WHSE001", "ORD001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+
+    def test_commit_and_verify(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(4, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+
+        # Verify the original stock level was correct
+        item.verify_stock_level(5, "WHSE001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(4, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Item quantities do not reflect verification count")
+
+    def test_commit_and_verify_with_backorder(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(6, "WHSE001", "ORD001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(2, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.quantity_backordered("ORD001"), "Item was not backordered")
+
+        # Verify the original stock level was correct
+        item.verify_stock_level(5, "WHSE001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(5, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(1, item.quantity_backordered("ORD001"), "Backorder should not have been modified")
+
+    def test_commit_with_verify_discrepancy(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(4, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+
+        # We could only find 3, 2 went missing!
+        item.verify_stock_level(3, "WHSE001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(1, item.quantity_backordered("ORD001"), "Backorder should have been created")
+        self.assertEquals(2, item.quantity_lost(), "Incorrect number of lost items tracked")
+
+    def test_commit_with_major_verify_discrepancy(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(4, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+
+        # All 5 went missing!
+        item.verify_stock_level(0, "WHSE001")
+
+        self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(0, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Item quantities do not reflect verification count")
+        self.assertEquals(4, item.quantity_backordered("ORD001"), "Backorder should have been created")
+        self.assertEquals(5, item.quantity_lost(), "Incorrect number of lost items tracked")
+
+    def test_commit_with_overstocked_verify(self):
+        item = InventoryItemFactory.build(on_hand_buffer=2)
+        item.enter_stock_on_hand(5, "WHSE001")
+
+        item.commit(4, "WHSE001", "ORD001")
+
+        self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
+        self.assertEquals(3, item.find_committed_for_order("ORD001")["WHSE001"].quantity,
+                          "Incorrect quantity was automatically verified")
+        self.assertEquals(1, item.find_committed_for_order("ORD001")["WHSE001"].unverified_quantity,
+                          "Incorrect quantity was automatically verified")
+
+        # We found an extra to make 6
+        item.verify_stock_level(6, "WHSE001")
 
 
 class InventoryBackordersTestCase(TestCase):

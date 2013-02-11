@@ -122,7 +122,7 @@ class InventoryItem(Entity):
 
     def backorder_commitment(self, quantity, warehouse, order_id):
         commitment = self.find_committed_for_order(order_id)
-        if not commitment or not commitment.has_key(warehouse):
+        if not commitment or warehouse not in commitment or commitment.get(warehouse).quantity < quantity:
             return
 
         self.tracker.transition("backorder_commitment",
@@ -132,7 +132,7 @@ class InventoryItem(Entity):
 
     def revert(self, quantity, warehouse, order_id):
         commitment = self.find_committed_for_order(order_id)
-        if not commitment or not commitment.has_key(warehouse):
+        if not commitment or warehouse not in commitment or commitment.get(warehouse).quantity < quantity:
             return
 
         self.tracker.transition("revert",

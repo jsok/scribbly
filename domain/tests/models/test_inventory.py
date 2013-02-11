@@ -193,6 +193,8 @@ class InventoryCommitNoBufferTestCase(TestCase):
         item.revert(100, "WHSEXXX", "ORD001")
         item.revert(100, "WHSE001", "ORDXXX")
         item.revert(100, "WHSEXXX", "ORDXXX")
+        # Over-revert should not pass
+        item.revert(10, "WHSE001", "ORD001")
 
         self.assertEquals(1, item.quantity_committed(warehouse="WHSE001"), "Only 1 commitment should remain after " +
                                                                            "revert")

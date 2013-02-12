@@ -1,5 +1,6 @@
 from domain.shared.service import Service
 
+
 class PricingService(Service):
 
     def __init__(self, discount_repository):

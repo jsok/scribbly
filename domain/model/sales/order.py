@@ -3,6 +3,7 @@ import operator
 from domain.shared.entity import Entity
 from domain.model.sales.line_item import LineItem
 
+
 class Order(Entity):
     def __init__(self, id, order_date, line_items=None, acknowledgement_date=None, customer_reference=None):
         self.id = id

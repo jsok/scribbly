@@ -7,6 +7,7 @@ from domain.service.pricing_service import PricingService
 from domain.tests.factories.customer import CustomerFactory
 from domain.tests.factories.product import ProductFactory
 
+
 class PricingServiceTestCase(TestCase):
 
     def setUp(self):

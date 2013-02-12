@@ -6,6 +6,7 @@ from nose.tools import raises
 from domain.tests.factories.inventory import InventoryItemFactory
 from domain.model.inventory.tracker import *
 
+
 class InventoryStatesTestCase(TestCase):
 
     def setUp(self):
@@ -62,6 +63,7 @@ class InventoryStatesTestCase(TestCase):
         self.assertEquals(5, self.machine.state("OnHand").quantity(), "On Hand quantity not reduced")
         self.assertEquals(10, self.machine.state("Committed").quantity(), "Wrong number of items committed")
 
+
 class InventoryOnHandTestCase(TestCase):
 
     def test_enter_stock_on_hand(self):
@@ -88,6 +90,7 @@ class InventoryOnHandTestCase(TestCase):
         item.enter_stock_on_hand(-1, "WHSE001")
 
         self.assertEquals(0, item.effective_quantity_on_hand(), "Incorrect on hand count set")
+
 
 class InventoryCommitNoBufferTestCase(TestCase):
 
@@ -377,6 +380,7 @@ class InventoryBackordersTestCase(TestCase):
         self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should still be empty")
         self.assertEquals(0, item.quantity_backordered(), "Cancel should have removed backorder")
 
+
 class InventoryFulfilledTestCase(TestCase):
 
     def test_fulfill_commitment(self):
@@ -406,6 +410,7 @@ class InventoryFulfilledTestCase(TestCase):
         self.assertEquals(1, item.quantity_fulfilled("INV002"), "Item was not fulfilled")
 
         self.assertEquals(2, item.quantity_fulfilled(), "Total number of fulfillments incorrect")
+
 
 class InventoryPurchaseOrderTestCase(TestCase):
 
@@ -445,6 +450,7 @@ class InventoryPurchaseOrderTestCase(TestCase):
         self.assertEquals(0, item.quantity_purchased(purchase_order_id="PO001"), "PO001 should be empty")
         self.assertEquals(0, item.quantity_purchased(), "No purchase orders should remain")
         self.assertEquals(14, item.effective_quantity_on_hand(), "Should now be 14 items on hand")
+
 
 class InventoryLostAndFoundTestCase(TestCase):
 

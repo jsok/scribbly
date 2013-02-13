@@ -1,8 +1,8 @@
 import functools
 import operator
 
-class TrackingStateMachine(object):
 
+class TrackingStateMachine(object):
     def __init__(self):
         self.states = {}
         self.transitions = {}
@@ -14,7 +14,7 @@ class TrackingStateMachine(object):
     def add_state(self, state):
         if not isinstance(state, TrackingState):
             raise TypeError()
-        self.states.update({ state.name: state })
+        self.states.update({state.name: state})
 
     def transition(self, name, from_item_dict, to_item_dict):
         """
@@ -22,7 +22,7 @@ class TrackingStateMachine(object):
         Validate the items being passed into each state.
         """
         null_op = lambda: None
-        if not self.transitions.has_key(name):
+        if name not in self.transitions:
             return null_op
 
         from_state, to_state = self.transitions.get(name)
@@ -46,7 +46,7 @@ class TrackingStateMachine(object):
             raise ValueError()
 
         if hasattr(from_state, name) and callable(getattr(from_state, name)):
-            self.transitions.update({ name: (from_state, to_state) })
+            self.transitions.update({name: (from_state, to_state)})
         else:
             raise ValueError()
 
@@ -56,7 +56,7 @@ class TrackingStateMachine(object):
         Args is a dict of arguments to pass to the action, validation is the responsibility of the state.
         """
         state = self.actions.get(name, None)
-        if not state: # pragma: no cover
+        if not state:  # pragma: no cover
             return lambda: None
         action = getattr(state, name)
         return functools.partial(action, args)
@@ -71,12 +71,12 @@ class TrackingStateMachine(object):
             raise ValueError()
 
         if hasattr(state, name):
-            self.actions.update({ name: state })
+            self.actions.update({name: state})
         else:
             raise ValueError()
 
-class TrackingState(object):
 
+class TrackingState(object):
     class TrackingItem(object):
         def __init__(self):
             self.validations = []
@@ -112,17 +112,16 @@ class TrackingState(object):
         """
         Internal track method all implementors provide.
         """
-        raise NotImplementedError() # pragma: no cover
+        raise NotImplementedError()  # pragma: no cover
 
     def quantity(self, key=None):
         """
         Quantity of items tracked, most implementors will have additional keys to filter on.
         """
-        raise NotImplementedError() # pragma: no cover
+        raise NotImplementedError()  # pragma: no cover
 
 
 class OnHandState(TrackingState):
-
     class OnHandItem(TrackingState.TrackingItem):
         def __init__(self, properties):
             super(self.__class__, self).__init__()
@@ -132,7 +131,7 @@ class OnHandState(TrackingState):
             self.validations.extend([
                 (lambda i: i.quantity >= 0),
                 (lambda i: i.warehouse is not None),
-                ])
+            ])
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.OnHandItem)
@@ -140,7 +139,7 @@ class OnHandState(TrackingState):
 
     def _track(self, item):
         new_quantity = item.quantity + self.items.get(item.warehouse, 0)
-        self.items.update({ item.warehouse: new_quantity })
+        self.items.update({item.warehouse: new_quantity})
 
     def quantity(self, warehouse=None):
         if warehouse:
@@ -150,7 +149,7 @@ class OnHandState(TrackingState):
 
     def _reduce_quantity_for(self, warehouse, quantity):
         current_quantity = self.items.get(warehouse)
-        self.items.update({ warehouse: max(0, current_quantity - quantity) })
+        self.items.update({warehouse: max(0, current_quantity - quantity)})
 
     def commit(self, to_state, from_item, to_item):
         self._reduce_quantity_for(from_item.warehouse, from_item.quantity)
@@ -166,13 +165,13 @@ class OnHandState(TrackingState):
 
 
 class CommittedState(TrackingState):
-
     class CommittedItem(TrackingState.TrackingItem):
         """
         When an order is acknowledged, it will commit items from the inventory.
         A committed item affects on-hand count and will eventually be shipped.
         As a safe-guard, a quantity can be marked as unverified until a physical count can confirm its existence.
         """
+
         def __init__(self, properties):
             import datetime
 
@@ -189,7 +188,7 @@ class CommittedState(TrackingState):
                 (lambda i: i.warehouse is not None),
                 (lambda i: i.date is not None),
                 (lambda i: i.order_id is not None),
-                ])
+            ])
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.CommittedItem)
@@ -198,9 +197,9 @@ class CommittedState(TrackingState):
 
     def _track(self, item):
         if self.items.has_key(item.order_id):
-            self.items.get(item.order_id).update({ item.warehouse: item })
+            self.items.get(item.order_id).update({item.warehouse: item})
         else:
-            self.items[item.order_id] = { item.warehouse: item }
+            self.items[item.order_id] = {item.warehouse: item}
 
     def get(self, order_id):
         return self.items.get(order_id, None)
@@ -210,7 +209,7 @@ class CommittedState(TrackingState):
 
         for warehouse_dict in [w for w in self.items.values() if warehouse in w]:
             item = warehouse_dict.get(warehouse)
-            if item.unverified_quantity > 0: # pragma: no cover
+            if item.unverified_quantity > 0:  # pragma: no cover
                 unverified_items.append(item)
 
         return unverified_items
@@ -286,12 +285,12 @@ class CommittedState(TrackingState):
 
 
 class BackorderState(TrackingState):
-
     class BackorderedItem(TrackingState.TrackingItem):
         """
         A backordered item is created when a product cannot be reserved.
         It tracks which order triggered its creation.
         """
+
         def __init__(self, properties):
             super(self.__class__, self).__init__()
             self.quantity = properties.get("quantity", 0)
@@ -304,7 +303,7 @@ class BackorderState(TrackingState):
                 (lambda i: i.date is not None),
                 (lambda i: i.order_id is not None),
                 (lambda i: i.allocated >= 0),
-                ])
+            ])
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.BackorderedItem)
@@ -315,7 +314,7 @@ class BackorderState(TrackingState):
             existing = self.items.get(item.order_id)
             item.quantity += existing.quantity
             item.allocated += existing.allocated
-        self.items.update({ item.order_id: item })
+        self.items.update({item.order_id: item})
 
     def get(self, order_id):
         return self.items.get(order_id, None)
@@ -344,12 +343,12 @@ class BackorderState(TrackingState):
 
 
 class FulfilledState(TrackingState):
-
     class FulfilledItem(TrackingState.TrackingItem):
         """
         A fulfilled item has been removed from the warehouse and sent to a customer as part of a delivery.
         This item tracks when it was fulfilled and how.
         """
+
         def __init__(self, properties):
             super(self.__class__, self).__init__()
             self.quantity = properties.get("quantity", 0)
@@ -362,7 +361,7 @@ class FulfilledState(TrackingState):
                 (lambda i: i.date is not None),
                 (lambda i: i.order_id is not None),
                 (lambda i: i.invoice_id is not None),
-                ])
+            ])
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.FulfilledItem)
@@ -370,27 +369,28 @@ class FulfilledState(TrackingState):
 
     def _track(self, item):
         # Invoices are immutable once entered
-        if item.invoice_id in self.items: # pragma: no cover
+        if item.invoice_id in self.items:  # pragma: no cover
             return
 
-        self.items.update({ item.invoice_id: item })
+        self.items.update({item.invoice_id: item})
 
     def get(self, invoice_id):
         return self.items.get(invoice_id, None)
 
     def quantity(self, invoice_id=None):
         if invoice_id:
-            return 0 if not self.items.has_key(invoice_id) else self.items.get(invoice_id).quantity
+            return 0 if invoice_id not in self.items else self.items.get(invoice_id).quantity
         else:
             return reduce(operator.add, [item.quantity for item in self.items.values()], 0)
 
-class PurchaseOrderState(TrackingState):
 
+class PurchaseOrderState(TrackingState):
     class PurchasedItem(TrackingState.TrackingItem):
         """
         When an purchase order for an item is issued to a supplier we track it.
         This item tracks when it was issue and when we expect it.
         """
+
         def __init__(self, properties):
             super(self.__class__, self).__init__()
             self.quantity = properties.get("quantity", 0)
@@ -402,7 +402,7 @@ class PurchaseOrderState(TrackingState):
                 (lambda i: i.quantity >= 0),
                 (lambda i: i.date is not None),
                 (lambda i: i.purchase_order_id is not None),
-                ])
+            ])
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.PurchasedItem)
@@ -413,14 +413,14 @@ class PurchaseOrderState(TrackingState):
         if item.purchase_order_id in self.items: # pragma: no cover
             return
 
-        self.items.update({ item.purchase_order_id: item })
+        self.items.update({item.purchase_order_id: item})
 
     def get(self, purchase_order_id):
         return self.items.get(purchase_order_id, None)
 
     def quantity(self, purchase_order_id=None):
         if purchase_order_id:
-            return 0 if not self.items.has_key(purchase_order_id) else self.items.get(purchase_order_id).quantity
+            return 0 if purchase_order_id not in self.items else self.items.get(purchase_order_id).quantity
         else:
             return reduce(operator.add, [item.quantity for item in self.items.values()], 0)
 
@@ -442,11 +442,11 @@ class PurchaseOrderState(TrackingState):
 
 
 class LostAndFoundState(TrackingState):
-
     class LostAndFoundItem(TrackingState.TrackingItem):
         """
         Lost and Found items, due to mis-count or other mistake.
         """
+
         def __init__(self, properties):
             super(self.__class__, self).__init__()
             self.quantity = properties.get("quantity", 0)
@@ -457,7 +457,7 @@ class LostAndFoundState(TrackingState):
                 (lambda i: i.quantity >= 0),
                 (lambda i: i.warehouse is not None),
                 (lambda i: i.date is not None),
-                ])
+            ])
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.LostAndFoundItem)

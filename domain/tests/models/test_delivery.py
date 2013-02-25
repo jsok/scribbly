@@ -1,4 +1,4 @@
-from unittest import TestCase, skip
+from unittest import TestCase
 from nose.tools import raises
 
 from domain.tests.factories.delivery import DeliveryFactory
@@ -36,6 +36,16 @@ class DeliveryTestCase(TestCase):
         delivery = DeliveryFactory.build()
         delivery.add_item("PROD001", 10, "WHSE001", "ORD001")
         delivery.adjust_deliver_quantity("PROD001", 11, "WHSE001", "ORD001")
+
+    @raises(StandardError)
+    def test_adjust_after_finalise(self):
+        delivery = DeliveryFactory.build()
+        delivery.add_item("PROD001", 10, "WHSE001", "ORD001")
+
+        # Fudge delivery finialisation
+        delivery.invoice_ids = [None]
+
+        delivery.adjust_deliver_quantity("PROD001", 10, "WHSE001", "ORD001")
 
     def test_get_delivery_orders(self):
         delivery = DeliveryFactory.build()

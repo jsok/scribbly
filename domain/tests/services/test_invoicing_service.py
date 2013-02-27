@@ -2,7 +2,7 @@ from mock import Mock, call
 from nose.tools import raises
 from unittest import TestCase, skip
 
-from domain.service.invoicing_service import InvoicingService
+from domain.service.invoicing_service import InvoicingService, InvoicingError
 from domain.tests.factories.customer import CustomerFactory
 from domain.tests.factories.inventory import InventoryItemFactory
 from domain.tests.factories.sales import OrderFactory
@@ -77,7 +77,8 @@ class InvoicingServiceTestCase(TestCase):
             ],
         }
 
-    @raises(ValueError)
+    from domain.service.invoicing_service import OrderDescriptorError
+    @raises(OrderDescriptorError)
     def test_invalid_order_descriptor(self):
         service = InvoicingService(None, None, None, None)
         service.invoice_order_descriptors("Customer", {
@@ -92,7 +93,7 @@ class InvoicingServiceTestCase(TestCase):
         service = InvoicingService(customer_repository, None, None, None)
         service.invoice_order_descriptors("Fake Customer", {})
 
-    @raises(LookupError)
+    @raises(InvoicingError)
     def test_invoice_orders_from_multiple_customers(self):
         service = InvoicingService(self.customer_repository, None, None, None)
 
@@ -100,7 +101,8 @@ class InvoicingServiceTestCase(TestCase):
 
         service.invoice_order_descriptors("Customer", self.order_descriptors)
 
-    @raises(StandardError)
+    from domain.service.invoicing_service import OrderUnacknowledgedError
+    @raises(OrderUnacknowledgedError)
     def test_invoice_unacknowledged_orders(self):
         service = InvoicingService(self.customer_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
@@ -109,24 +111,31 @@ class InvoicingServiceTestCase(TestCase):
 
         service.invoice_order_descriptors("Customer", self.order_descriptors)
 
-    @raises(LookupError)
+    @raises(InvoicingError)
     def test_invoice_descriptor_nonexistent_sku(self):
         service = InvoicingService(self.customer_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
 
-        # Order descriptor has a quantity greater than the order's commitment in the inventory
         self.order_descriptors["ORD001"][0]["sku"] = "PRODFAKE"
-        print self.order_descriptors
 
         service.invoice_order_descriptors("Customer", self.order_descriptors)
 
-    @ raises(ValueError)
+    @raises(InvoicingError)
+    def test_invoice_descriptor_nonexistent_commitment(self):
+        service = InvoicingService(self.customer_repository, self.order_repository,
+                                   self.inventory_repository, self.tax_repository)
+
+        # Order descriptor has a commitment for a warehouse that doesn't exist
+        self.order_descriptors["ORD001"].append({"sku": "PROD001", "quantity": 1, "warehouse": "WHSE00X"})
+
+        service.invoice_order_descriptors("Customer", self.order_descriptors)
+
+    @raises(InvoicingError)
     def test_invoice_descriptor_inventory_mismatch(self):
         service = InvoicingService(self.customer_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
 
         # Order descriptor has a quantity greater than the order's commitment in the inventory
         self.order_descriptors["ORD001"][0]["quantity"] = 10
-        print self.order_descriptors
 
         service.invoice_order_descriptors("Customer", self.order_descriptors)

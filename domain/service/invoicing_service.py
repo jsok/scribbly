@@ -1,3 +1,4 @@
+from datetime import datetime
 import operator
 
 from domain.shared.service import Service
@@ -21,7 +22,7 @@ class InvoicingService(Service):
             descriptor_keys = set(descriptor.keys())
 
             if not descriptor_keys.issubset(expected_keys):
-                raise ValueError("Invalid order descriptor: %s" % descriptor)
+                raise OrderDescriptorError("Invalid order descriptor: %s" % descriptor)
 
     def invoice_order_descriptors(self, customer_id, order_descriptors):
         """
@@ -48,8 +49,7 @@ class InvoicingService(Service):
             raise ValueError("Cannot find specified customer for delivery")
 
         if False in map(lambda order_id: order_id in customer.orders, order_descriptors.keys()):
-            print customer.orders
-            raise LookupError("All orders must belong to the same customer")
+            raise InvoicingError("All orders must belong to the same customer")
 
         tax_rate = self.tax_rate_repository.find(customer.tax_category)
 
@@ -58,17 +58,53 @@ class InvoicingService(Service):
             order = self.order_repository.find(order_id)
 
             if not order.is_acknowledged():
-                raise StandardError("Cannot invoice unacknowledged order")
+                raise OrderUnacknowledgedError
+
+            invoice = Invoice(None, customer_id, datetime.now(), order_id=order_id,
+                              customer_reference=order.customer_reference)
 
             for descriptor in descriptors:
-                inventory_item = self.inventory_repository.find(descriptor.get("sku"))
+                sku = descriptor.get("sku")
+                warehouse = descriptor.get("warehouse")
+                quantity = descriptor.get("quantity")
+
+                inventory_item = self.inventory_repository.find(sku)
                 if not inventory_item:
-                    raise LookupError("Could not find SKU %s in Inventory" % descriptor.get("sku"))
+                    raise InvoicingError("Could not find SKU %s in Inventory" % sku)
 
                 warehouses = inventory_item.find_committed_for_order(order_id)
-                commitment = warehouses.get(descriptor.get("warehouse"), None)
+                commitment = warehouses.get(warehouse, None)
                 if not commitment:
-                    raise LookupError("Inventory commitment does not exist")
+                    raise InvoicingError("Inventory commitment does not exist")
 
-                if descriptor.get("quantity") > commitment.quantity:
-                    raise ValueError("Order descriptor has requested quantity greater than order commitment")
+                if quantity > commitment.quantity:
+                    raise InvoicingError("Order descriptor has requested quantity greater than order commitment")
+
+                for line_item in order.get_line_items_for_sku(sku):
+                    invoice.add_line_item(line_item.sku, quantity, line_item.price, line_item.discount,
+                                          tax_rate=tax_rate.rate)
+
+            invoices.append(invoice)
+
+        return invoices
+
+
+class InvoicingError(Exception):
+    """
+    A generic exception which is thrown when invoicing fails.
+    """
+    pass
+
+
+class OrderDescriptorError(Exception):
+    """
+    An order descriptor passed to the invoicing service does not validate.
+    """
+    pass
+
+
+class OrderUnacknowledgedError(Exception):
+    """
+    An order which has not been acknowledged was attempted to be invoiced.
+    """
+    pass

@@ -1,9 +1,9 @@
 from mock import Mock, call
-from unittest import TestCase, skip
+from nose.tools import raises
+from unittest import TestCase
 
 from domain.service.delivery_service import DeliveryService
 from domain.tests.factories.inventory import InventoryItemFactory
-from domain.tests.factories.sales import OrderFactory
 
 
 class DeliveryServiceTestCase(TestCase):
@@ -62,14 +62,26 @@ class DeliveryServiceTestCase(TestCase):
         self.inventory_repository = Mock()
         self.inventory_repository.find = Mock(side_effect=lambda sku: inventory.get(sku))
 
-    def test_generate_packing_list_from_order(self):
-        service = DeliveryService(self.order_repository, self.inventory_repository)
+        self.customer_repository = Mock()
+        self.customer_repository.find = Mock(return_value=True)
 
-        packing_list = service.generate_packing_list(["ORD001"])
+    @raises(ValueError)
+    def test_delivery_invalid_customer(self):
+        customer_repository = Mock()
+        customer_repository.find = Mock(return_value=None)
+
+        service = DeliveryService(customer_repository, self.order_repository, self.inventory_repository)
+        service.create_delivery("NOT_A_CUSTOMER", ["ORD001"])
+
+    def test_create_delivery_single_order(self):
+        service = DeliveryService(self.customer_repository, self.order_repository, self.inventory_repository)
+
+        delivery = service.create_delivery("Customer", ["ORD001"])
 
         self.assertTrue(call("ORD001") in self.order_repository.find.call_args_list, "ORD001 was not queried for")
         self.assertTrue(call("PROD001") in self.inventory_repository.find.call_args_list, "PROD001 was not queried for")
         self.assertTrue(call("PROD002") in self.inventory_repository.find.call_args_list, "PROD002 was not queried for")
 
         for sku in ["PROD001", "PROD002"]:
-            self.assertTrue(sku in packing_list.list_skus(), "Could not find {0} in SKU list".format(sku))
+            self.assertIsNotNone(delivery._find_item(sku, "WHSE001", "ORD001"),
+                                 "Could not find {0} in delivery".format(sku))

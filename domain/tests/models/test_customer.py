@@ -3,6 +3,7 @@ from nose.tools import raises
 
 from domain.tests.factories.customer import CustomerFactory, ContactFactory, AddressFactory
 
+
 class ContactTestCase(TestCase):
 
     def test_contact_roles(self):

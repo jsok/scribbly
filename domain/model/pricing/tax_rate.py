@@ -1,5 +1,6 @@
 from domain.shared.entity import Entity
 
+
 class TaxRate(Entity):
     """
     Tax rate which can be applied to line items in sales documents.

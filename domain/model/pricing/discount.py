@@ -1,5 +1,6 @@
 from domain.shared.entity import Entity
 
+
 class Discount(Entity):
     """
     Matches a product price tier and customer discount tier to a discount value.

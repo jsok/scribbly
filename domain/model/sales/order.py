@@ -3,16 +3,21 @@ import operator
 from domain.shared.entity import Entity
 from domain.model.sales.line_item import LineItem
 
+
 class Order(Entity):
-    def __init__(self, id, order_date, line_items=None, acknowledgement_date=None, customer_reference=None):
-        self.id = id
+    def __init__(self, order_id, customer, order_date, line_items=None, customer_reference=None):
+        self.order_id = order_id
+        self.customer = customer
         self.order_date = order_date
         self.line_items = line_items if line_items else []
-        self.acknowledgement_date = acknowledgement_date if acknowledgement_date else None
+        self.acknowledgement_date = None
         self.customer_reference = customer_reference if customer_reference else None
 
     def is_acknowledged(self):
         return self.acknowledgement_date is not None
+
+    def acknowledge(self, date):
+        self.acknowledgement_date = date
 
     def total_amount(self):
         return reduce(operator.add, [i.total() for i in self.line_items], 0.00)

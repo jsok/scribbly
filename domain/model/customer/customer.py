@@ -3,6 +3,7 @@ from domain.shared.entity import Entity
 from domain.model.customer.address import Address
 from domain.model.customer.contact import Contact
 
+
 class Customer(Entity):
     """
     A customer is an aggregate root for all contact details and sales history for a single customer.

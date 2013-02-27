@@ -24,5 +24,6 @@ class PackingListFactory(factory.Factory):
 class InvoiceFactory(factory.Factory):
     FACTORY_FOR = invoice.Invoice
 
-    id = factory.Sequence(lambda n: 'INV%03d'% n, type=int)
+    invoice_id = factory.Sequence(lambda n: 'INV%03d'% n, type=int)
+    customer = "Customer Name"
     invoice_date = datetime.datetime.now()

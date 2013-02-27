@@ -74,9 +74,9 @@ class SalesInvoiceTestCase(TestCase):
     def test_invoice_is_accepted(self):
         invoice = InvoiceFactory.build()
 
-        self.assertIsNotNone(invoice.id, "Invoice ID was not set")
+        self.assertIsNotNone(invoice.invoice_id, "Invoice ID was not set")
         self.assertIsNotNone(invoice.invoice_date, "Invoice date was not set")
-        self.assertFalse(invoice.finalised, "Invoice should not have been acknowledged")
+        self.assertFalse(invoice.finalised, "Invoice should not have been finalised")
 
     def test_invoice_adds_line_item(self):
         invoice = InvoiceFactory.build()

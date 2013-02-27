@@ -26,7 +26,6 @@ class DeliveryService(Service):
 
             for line_item in order.line_items:
                 inventory_item = self.inventory_repository.find(line_item.sku)
-                print line_item.sku
                 warehouses = inventory_item.find_committed_for_order(order_id)
 
                 for item in warehouses.itervalues():

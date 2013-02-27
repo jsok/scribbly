@@ -2,6 +2,7 @@ import factory
 
 from domain.model.customer import customer, contact, address
 
+
 class CustomerFactory(factory.Factory):
     FACTORY_FOR = customer.Customer
 
@@ -9,12 +10,14 @@ class CustomerFactory(factory.Factory):
     discount_tier = "GRADE-A"
     tax_category = "GST"
 
+
 class ContactFactory(factory.Factory):
     FACTORY_FOR = contact.Contact
 
     firstname = "First"
     lastname = "Last"
     email = "first.last@example.com"
+
 
 class AddressFactory(factory.Factory):
     FACTORY_FOR = address.Address

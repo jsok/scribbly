@@ -8,7 +8,8 @@ from domain.model.sales import order, packing_list, invoice
 class OrderFactory(factory.Factory):
     FACTORY_FOR = order.Order
 
-    id = factory.Sequence(lambda n: 'ORD%03d'% n, type=int)
+    order_id = factory.Sequence(lambda n: 'ORD%03d'% n, type=int)
+    customer = "Customer Name"
     order_date = datetime.datetime.now()
 
 

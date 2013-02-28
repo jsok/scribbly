@@ -89,6 +89,12 @@ class InvoicingService(Service):
 
         return invoices
 
+    def invoice_delivery(self, delivery):
+        invoices = self._invoice_order_descriptors(delivery.customer, delivery.get_orders())
+        map(lambda invoice: delivery.add_invoice(invoice.invoice_id), invoices)
+
+        return invoices
+
 
 class InvoicingError(Exception):
     """

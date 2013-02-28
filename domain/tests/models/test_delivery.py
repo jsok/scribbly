@@ -57,7 +57,8 @@ class DeliveryTestCase(TestCase):
         delivery.adjust_deliver_quantity("PROD001", 10, "WHSE002", "ORD001")
         delivery.adjust_deliver_quantity("PROD001", 2, "WHSE001", "ORD002")
 
-        for order_id, items in delivery.get_orders():
+        orders = delivery.get_orders()
+        for order_id, items in orders.iteritems():
             for item in items:
                 if order_id == "ORD001" and item["sku"] == "PROD001" and item["warehouse"] == "WHSE001":
                     self.assertEqual(8, item["quantity"], "Wrong qty for PROD001 in ORD001")

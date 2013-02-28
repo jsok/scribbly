@@ -57,7 +57,7 @@ class DeliveryTestCase(TestCase):
         delivery.adjust_deliver_quantity("PROD001", 10, "WHSE002", "ORD001")
         delivery.adjust_deliver_quantity("PROD001", 2, "WHSE001", "ORD002")
 
-        orders = delivery.get_orders()
+        orders = delivery.get_order_descriptors()
         for order_id, items in orders.iteritems():
             for item in items:
                 if order_id == "ORD001" and item["sku"] == "PROD001" and item["warehouse"] == "WHSE001":

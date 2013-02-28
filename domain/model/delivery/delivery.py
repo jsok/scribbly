@@ -43,7 +43,7 @@ class Delivery(Entity):
 
         item.update({"deliver_quantity": quantity})
 
-    def get_orders(self):
+    def get_order_descriptors(self):
         orders = {}
 
         for item in self.items:

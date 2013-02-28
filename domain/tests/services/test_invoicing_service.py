@@ -81,7 +81,7 @@ class InvoicingServiceTestCase(TestCase):
     @raises(OrderDescriptorError)
     def test_invalid_order_descriptor(self):
         service = InvoicingService(None, None, None, None)
-        service.invoice_order_descriptors("Customer", {
+        service._invoice_order_descriptors("Customer", {
             "ORD001": [{"bad": None, "keys": None}]
         })
 
@@ -91,7 +91,7 @@ class InvoicingServiceTestCase(TestCase):
         customer_repository.find = Mock(return_value=None)
 
         service = InvoicingService(customer_repository, None, None, None)
-        service.invoice_order_descriptors("Fake Customer", {})
+        service._invoice_order_descriptors("Fake Customer", {})
 
         self.assertTrue(call("Fake Customer") in self.customer_repository.find.call_args_list,
                         "Fake Customer was not queried for")
@@ -102,7 +102,7 @@ class InvoicingServiceTestCase(TestCase):
 
         self.order_descriptors["ORD999"] = []  # Does not belong to Customer
 
-        service.invoice_order_descriptors("Customer", self.order_descriptors)
+        service._invoice_order_descriptors("Customer", self.order_descriptors)
 
     from domain.service.invoicing_service import OrderUnacknowledgedError
     @raises(OrderUnacknowledgedError)
@@ -112,7 +112,7 @@ class InvoicingServiceTestCase(TestCase):
 
         self.order_descriptors["ORD00X"] = []  # Has not been acknowledged
 
-        service.invoice_order_descriptors("Customer", self.order_descriptors)
+        service._invoice_order_descriptors("Customer", self.order_descriptors)
 
     @raises(InvoicingError)
     def test_invoice_descriptor_nonexistent_sku(self):
@@ -120,7 +120,7 @@ class InvoicingServiceTestCase(TestCase):
                                    self.inventory_repository, self.tax_repository)
 
         self.order_descriptors["ORD001"][0]["sku"] = "PRODFAKE"
-        service.invoice_order_descriptors("Customer", self.order_descriptors)
+        service._invoice_order_descriptors("Customer", self.order_descriptors)
 
         self.assertTrue(call("PRODFAKE") in self.inventory_repository.find.call_args_list, "SKU was not queried for")
 
@@ -132,7 +132,7 @@ class InvoicingServiceTestCase(TestCase):
         # Order descriptor has a commitment for a warehouse that doesn't exist
         self.order_descriptors["ORD001"].append({"sku": "PROD001", "quantity": 1, "warehouse": "WHSE00X"})
 
-        service.invoice_order_descriptors("Customer", self.order_descriptors)
+        service._invoice_order_descriptors("Customer", self.order_descriptors)
 
     @raises(InvoicingError)
     def test_invoice_descriptor_inventory_mismatch(self):
@@ -142,13 +142,13 @@ class InvoicingServiceTestCase(TestCase):
         # Order descriptor has a quantity greater than the order's commitment in the inventory
         self.order_descriptors["ORD001"][0]["quantity"] = 10
 
-        service.invoice_order_descriptors("Customer", self.order_descriptors)
+        service._invoice_order_descriptors("Customer", self.order_descriptors)
 
     def test_invoice_orders(self):
         service = InvoicingService(self.customer_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
 
-        invoices = service.invoice_order_descriptors("Customer", self.order_descriptors)
+        invoices = service._invoice_order_descriptors("Customer", self.order_descriptors)
 
         self.assertEquals(2, len(invoices), "Exactly 2 invoices should have been created")
 

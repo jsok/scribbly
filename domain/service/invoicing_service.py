@@ -24,7 +24,7 @@ class InvoicingService(Service):
             if not descriptor_keys.issubset(expected_keys):
                 raise OrderDescriptorError("Invalid order descriptor: %s" % descriptor)
 
-    def invoice_order_descriptors(self, customer_id, order_descriptors):
+    def _invoice_order_descriptors(self, customer_id, order_descriptors):
         """
         An order descriptor is a subset of line items which need to be invoiced.
 
@@ -84,7 +84,8 @@ class InvoicingService(Service):
                     invoice.add_line_item(line_item.sku, quantity, line_item.price, line_item.discount,
                                           tax_rate=tax_rate.rate)
 
-            invoices.append(invoice)
+            if invoice.line_items:
+                invoices.append(invoice)
 
         return invoices
 

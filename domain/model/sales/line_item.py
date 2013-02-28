@@ -11,7 +11,7 @@ class LineItem(object):
         self.tax_rate = tax_rate if tax_rate else None
 
     def __repr__(self):
-        tax_rate = self.tax_rate.rate if self.tax_rate else 0.00
+        tax_rate = self.tax_rate if self.tax_rate else 0.00
         return "<Line Item: SKU={sku}, Quantity={quantity}, Price={price}, Discount={discount}, " \
                "TaxRate={tax_rate}".format(sku=self.sku, quantity=self.quantity, price=self.price,
                                            discount=self.discount, tax_rate=tax_rate)

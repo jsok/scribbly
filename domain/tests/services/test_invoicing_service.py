@@ -18,7 +18,7 @@ class InvoicingServiceTestCase(TestCase):
         self.customer_repository.find = Mock(return_value=customer)
 
         tax_rate = Mock()
-        tax_rate.rate = Mock(side_effect=0.1)
+        tax_rate.rate = 0.1
         self.tax_repository = Mock()
         self.tax_repository.find = Mock(return_value=tax_rate)
 
@@ -93,6 +93,9 @@ class InvoicingServiceTestCase(TestCase):
         service = InvoicingService(customer_repository, None, None, None)
         service.invoice_order_descriptors("Fake Customer", {})
 
+        self.assertTrue(call("Fake Customer") in self.customer_repository.find.call_args_list,
+                        "Fake Customer was not queried for")
+
     @raises(InvoicingError)
     def test_invoice_orders_from_multiple_customers(self):
         service = InvoicingService(self.customer_repository, None, None, None)
@@ -117,8 +120,9 @@ class InvoicingServiceTestCase(TestCase):
                                    self.inventory_repository, self.tax_repository)
 
         self.order_descriptors["ORD001"][0]["sku"] = "PRODFAKE"
-
         service.invoice_order_descriptors("Customer", self.order_descriptors)
+
+        self.assertTrue(call("PRODFAKE") in self.inventory_repository.find.call_args_list, "SKU was not queried for")
 
     @raises(InvoicingError)
     def test_invoice_descriptor_nonexistent_commitment(self):
@@ -139,3 +143,23 @@ class InvoicingServiceTestCase(TestCase):
         self.order_descriptors["ORD001"][0]["quantity"] = 10
 
         service.invoice_order_descriptors("Customer", self.order_descriptors)
+
+    def test_invoice_orders(self):
+        service = InvoicingService(self.customer_repository, self.order_repository,
+                                   self.inventory_repository, self.tax_repository)
+
+        invoices = service.invoice_order_descriptors("Customer", self.order_descriptors)
+
+        self.assertEquals(2, len(invoices), "Exactly 2 invoices should have been created")
+
+        inv_ord001 = [inv for inv in invoices if inv.order_id == "ORD001"][0]
+        self.assertEquals("CUST-PO001", inv_ord001.customer_reference, "Incorrect customer reference")
+        self.assertEquals(2, len(inv_ord001.line_items), "Invoice should only contain 2 line items")
+        self.assertEquals(132.00, inv_ord001.total_amount(), "Invoice total is incorrect")
+        self.assertFalse(inv_ord001.finalised, "Invoice should not yet be finalised")
+
+        inv_ord002 = [inv for inv in invoices if inv.order_id == "ORD002"][0]
+        self.assertEquals("CUST-PO002", inv_ord002.customer_reference, "Incorrect customer reference")
+        self.assertEquals(3, len(inv_ord002.line_items), "Invoice should only contain 3 line items")
+        self.assertEquals(242.00, inv_ord002.total_amount(), "Invoice total is incorrect")
+        self.assertFalse(inv_ord002.finalised, "Invoice should not yet be finalised")

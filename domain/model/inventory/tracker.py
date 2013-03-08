@@ -193,23 +193,27 @@ class CommittedState(TrackingState):
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.CommittedItem)
         self.items = {}
-        # items is dict of dict: { order_id: { warehouse: item } }
+        # items is dict, keyed by (order_id, warehouse) tuple: { (order_id, warehouse): item }
 
     def _track(self, item):
-        if self.items.has_key(item.order_id):
-            self.items.get(item.order_id).update({item.warehouse: item})
+        if (item.order_id, item.warehouse) in self.items:
+            self.items.get((item.order_id, item.warehouse)).update(item)
         else:
-            self.items[item.order_id] = {item.warehouse: item}
+            self.items[(item.order_id, item.warehouse)] = item
 
     def get(self, order_id):
-        return self.items.get(order_id, None)
+        matches = {}
+        for key, item in self.items.iteritems():
+            if order_id in key:
+                matches[key] = item
+
+        return matches
 
     def get_unverified(self, warehouse):
         unverified_items = []
 
-        for warehouse_dict in [w for w in self.items.values() if warehouse in w]:
-            item = warehouse_dict.get(warehouse)
-            if item.unverified_quantity > 0:  # pragma: no cover
+        for key, item in self.items.iteritems():
+            if warehouse in key and item.unverified_quantity > 0:
                 unverified_items.append(item)
 
         return unverified_items
@@ -217,23 +221,20 @@ class CommittedState(TrackingState):
     def quantity(self, warehouse=None):
         quantity = 0
 
-        for warehouse_dict in self.items.values():
-            if warehouse in warehouse_dict:
-                quantity += warehouse_dict.get(warehouse).quantity
-                quantity += warehouse_dict.get(warehouse).unverified_quantity
-            elif warehouse is None:
-                for item in warehouse_dict.values():
-                    quantity += item.quantity
-                    quantity += item.unverified_quantity
+        for item in self.items.itervalues():
+            if warehouse and item.warehouse != warehouse:
+                continue
+            else:
+                quantity += item.quantity
+                quantity += item.unverified_quantity
 
         return quantity
 
     def _reduce_quantity_for(self, order_id, warehouse, quantity):
-        warehouses = self.items.get(order_id)
-        item = warehouses.get(warehouse)
+        item = self.items.get((order_id, warehouse), None)
 
         if item.quantity == quantity:
-            del warehouses[warehouse]
+            del self.items[(order_id, warehouse)]
         else:
             item.quantity -= quantity
 
@@ -254,11 +255,9 @@ class CommittedState(TrackingState):
         if verified_quantity is None:
             raise KeyError()
 
-        for warehouse_dict in self.items.values():
+        warehouse = item["warehouse"]
+        for item in [v for k,v in self.items.iteritems() if warehouse in k]:
             # TODO: Verify oldest orders first
-            item = warehouse_dict.get(item["warehouse"], None)
-            if not item:
-                continue
 
             if item.quantity <= verified_quantity:
                 verified_quantity -= item.quantity
@@ -277,8 +276,7 @@ class CommittedState(TrackingState):
                 verified_quantity = 0
 
     def verify_out_of_stock(self, to_state, from_item, to_item):
-        warehouses = self.items.get(from_item.order_id)
-        item = warehouses.get(from_item.warehouse)
+        item = self.items.get((from_item.order_id, from_item.warehouse))
         item.unverified_quantity -= from_item.quantity
 
         to_state.track(to_item)

@@ -109,9 +109,10 @@ class InventoryItem(Entity):
         )()
 
     def fulfill_commitment(self, quantity, warehouse, order_id, invoice_id):
-        commitment = self.find_committed_for_order(order_id)
-        if not commitment or \
-                not commitment.has_key(warehouse) or \
+        # XXX: Move checks into states
+        commitments = self.find_committed_for_order(order_id)
+        if not commitments or \
+                not any(warehouse for _, _warehouse in commitments if warehouse == _warehouse) or \
                 self.find_fulfillment_for_invoice(invoice_id) is not None:
             return
 
@@ -121,8 +122,11 @@ class InventoryItem(Entity):
         )()
 
     def backorder_commitment(self, quantity, warehouse, order_id):
-        commitment = self.find_committed_for_order(order_id)
-        if not commitment or warehouse not in commitment or commitment.get(warehouse).quantity < quantity:
+        # XXX: Move checks into states
+        commitments = self.find_committed_for_order(order_id)
+        if not commitments or \
+                not any(warehouse for _, _warehouse in commitments if warehouse == _warehouse) or \
+                commitments.get((order_id, warehouse)).quantity < quantity:
             return
 
         self.tracker.transition("backorder_commitment",
@@ -131,8 +135,11 @@ class InventoryItem(Entity):
         )()
 
     def revert(self, quantity, warehouse, order_id):
-        commitment = self.find_committed_for_order(order_id)
-        if not commitment or warehouse not in commitment or commitment.get(warehouse).quantity < quantity:
+        # XXX: Move checks into states
+        commitments = self.find_committed_for_order(order_id)
+        if not commitments or \
+                not any(warehouse for _, _warehouse in commitments if warehouse == _warehouse) or \
+                commitments.get((order_id, warehouse)).quantity < quantity:
             return
 
         self.tracker.transition("revert",

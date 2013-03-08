@@ -1,5 +1,4 @@
 from datetime import datetime
-import operator
 
 from domain.shared.service import Service
 from domain.model.sales.invoice import Invoice
@@ -72,8 +71,8 @@ class InvoicingService(Service):
                 if not inventory_item:
                     raise InvoicingError("Could not find SKU %s in Inventory" % sku)
 
-                warehouses = inventory_item.find_committed_for_order(order_id)
-                commitment = warehouses.get(warehouse, None)
+                commitments = inventory_item.find_committed_for_order(order_id)
+                commitment = commitments.get((order_id, warehouse), None)
                 if not commitment:
                     raise InvoicingError("Inventory commitment does not exist")
 

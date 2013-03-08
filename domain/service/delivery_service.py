@@ -26,9 +26,19 @@ class DeliveryService(Service):
 
             for line_item in order.line_items:
                 inventory_item = self.inventory_repository.find(line_item.sku)
-                warehouses = inventory_item.find_committed_for_order(order_id)
+                commitments = inventory_item.find_committed_for_order(order_id)
 
-                for item in warehouses.itervalues():
-                    delivery.add_item(line_item.sku, item.quantity, item.warehouse, item.order_id)
+                for (_, warehouse), item in commitments:
+                    if inventory_item.committed.get_unverified(warehouse):
+                        raise DeliveryError("Cannot create delivery from unverified order")
+
+                    delivery.add_item(line_item.sku, item.quantity, warehouse, item.order_id)
 
         return delivery
+
+
+class DeliveryError(Exception):
+    """
+    A generic exception which is thrown when delivery creation fails.
+    """
+    pass

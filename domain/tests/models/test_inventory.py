@@ -179,9 +179,9 @@ class InventoryCommitNoBufferTestCase(TestCase):
         self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should be committed to WHSE001")
 
         # Ensure bogus backorders have no effect
-        item.backorder_commitment(100, "WHSEXXX", "ORDXXX")
-        item.backorder_commitment(100, "WHSEXXX", "ORD001")
-        item.backorder_commitment(100, "WHSE001", "ORDXXX")
+        self.assertFalse(item.backorder_commitment(100, "WHSEXXX", "ORDXXX"), "Bogus backorder did not fail")
+        self.assertFalse(item.backorder_commitment(100, "WHSEXXX", "ORD001"), "Bogus backorder did not fail")
+        self.assertFalse(item.backorder_commitment(100, "WHSE001", "ORDXXX"), "Bogus backorder did not fail")
         self.assertEquals(1, item.effective_quantity_on_hand(), "Incorrect effective on-hand count set after commit")
         self.assertEquals(2, item.quantity_committed(warehouse="WHSE001"), "2 items should be committed to WHSE001")
 
@@ -297,7 +297,7 @@ class InventoryCommitWithBufferTestCase(TestCase):
         item = InventoryItemFactory.build(on_hand_buffer=2)
         item.enter_stock_on_hand(5, "WHSE001")
 
-        item.commit(4, "WHSE001", "ORD001")
+        self.assertTrue(item.commit(4, "WHSE001", "ORD001"))
 
         self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
         self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,

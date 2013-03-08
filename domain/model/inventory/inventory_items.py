@@ -99,63 +99,72 @@ class InventoryItem(Entity):
         return self.committed.quantity(warehouse=warehouse)
 
     def commit(self, quantity, warehouse, order_id):
+        result = True
         effective_quantity = self.effective_quantity_on_hand(warehouse=warehouse)
 
-        # Create a backorder for quantity we know is impossible to commit
         backordered_quantity = max(0, quantity - effective_quantity)
         if backordered_quantity > 0:
-            self.backorders.track({"quantity": backordered_quantity, "date": datetime.now(), "order_id": order_id})
+            try:
+                # Create a backorder for quantity we know is impossible to commit
+                self.backorders.track({"quantity": backordered_quantity, "date": datetime.now(), "order_id": order_id})
+            except TransitionValidationError:
+                result = False
+
+        # Short circuit, we know we cannot commit anything
+        if backordered_quantity == quantity:
+            return result
 
         maximum_committable_quantity = quantity - backordered_quantity
         maximum_verified_quantity = max(0, effective_quantity - self.on_hand_buffer)
         verified_quantity = min(maximum_verified_quantity, maximum_committable_quantity)
         unverified_quantity = max(0, maximum_committable_quantity - maximum_verified_quantity)
 
-        self.transition("commit",
-                        {"quantity": verified_quantity + unverified_quantity, "warehouse": warehouse},
-                        {"quantity": verified_quantity, "unverified_quantity": unverified_quantity,
-                         "warehouse": warehouse, "order_id": order_id, "date": datetime.now()})
+        try:
+            self.transition("commit",
+                            {"quantity": verified_quantity + unverified_quantity, "warehouse": warehouse},
+                            {"quantity": verified_quantity, "unverified_quantity": unverified_quantity,
+                             "warehouse": warehouse, "order_id": order_id, "date": datetime.now()})
+        except TransitionValidationError:
+            result = False
+
+        return result
 
     def fulfill_commitment(self, quantity, warehouse, order_id, invoice_id):
-        # XXX: Move checks into states
-        commitments = self.find_committed_for_order(order_id)
-        if not commitments or \
-                not any(warehouse for _, _warehouse in commitments if warehouse == _warehouse) or \
-                self.find_fulfillment_for_invoice(invoice_id) is not None:
-            return
+        try:
+            now = datetime.now()
+            self.transition("fulfill",
+                            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": now},
+                            {"quantity": quantity, "order_id": order_id, "invoice_id": invoice_id, "date": now})
+        except TransitionValidationError:
+            return False
 
-        self.tracker.transition("fulfill",
-            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()},
-            {"quantity": quantity, "order_id": order_id, "invoice_id": invoice_id, "date": datetime.now()},
-        )()
+        return True
 
     def backorder_commitment(self, quantity, warehouse, order_id):
-        # XXX: Move checks into states
-        commitments = self.find_committed_for_order(order_id)
-        if not commitments or \
-                not any(warehouse for _, _warehouse in commitments if warehouse == _warehouse) or \
-                commitments.get((order_id, warehouse)).quantity < quantity:
-            return
+        try:
+            now = datetime.now()
+            self.transition("backorder_commitment",
+                            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id,"date": now},
+                            {"quantity": quantity, "order_id": order_id, "date": now, "allocated": 0})
+        except TransitionValidationError:
+            return False
 
-        self.tracker.transition("backorder_commitment",
-            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()},
-            {"quantity": quantity, "order_id": order_id, "date": datetime.now(), "allocated": 0}
-        )()
+        return True
 
     def revert(self, quantity, warehouse, order_id):
-        # XXX: Move checks into states
-        commitments = self.find_committed_for_order(order_id)
-        if not commitments or \
-                not any(warehouse for _, _warehouse in commitments if warehouse == _warehouse) or \
-                commitments.get((order_id, warehouse)).quantity < quantity:
-            return
+        try:
+            now = datetime.now()
+            self.transition("revert",
+                            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": now},
+                            {"quantity": quantity, "warehouse": warehouse})
+        except TransitionValidationError:
+            return False
 
-        self.tracker.transition("revert",
-            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()},
-            {"quantity": quantity, "warehouse": warehouse}
-        )()
+        return True
 
     def verify_stock_level(self, quantity, warehouse):
+        # XXX: Ensure atomicity
+
         expected_quantity = self.physical_quantity_on_hand(warehouse=warehouse)
         now = datetime.now()
 
@@ -165,12 +174,11 @@ class InventoryItem(Entity):
         # Propagate any lost stock into backorders
         if quantity < expected_quantity:
             for item in self.committed.get_unverified(warehouse):
-                self.tracker.transition("verify_out_of_stock",
-                    {"quantity": item.unverified_quantity, "warehouse": warehouse, "order_id": item.order_id,
-                        "date": now},
-                    {"quantity": item.unverified_quantity, "warehouse": warehouse, "order_id": item.order_id,
-                        "date": now}
-                )()
+                self.transition("verify_out_of_stock",
+                                {"quantity": item.unverified_quantity, "warehouse": warehouse,
+                                 "order_id": item.order_id, "date": now},
+                                {"quantity": item.unverified_quantity, "warehouse": warehouse,
+                                 "order_id": item.order_id, "date": now})
 
             # Declare lost quantity
             lost_quantity = expected_quantity - quantity
@@ -200,12 +208,12 @@ class InventoryItem(Entity):
         self.tracker.transition("allocate",
             {"quantity": quantity, "warehouse": warehouse},
             {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": quantity}
-        )()
+        )
 
         self.tracker.transition("fulfill_backorder",
             {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": quantity},
             {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()}
-        )()
+        )
 
     def cancel_backorder(self, warehouse, order_id):
         backorder = self.find_backorder_for_order(order_id)
@@ -216,7 +224,7 @@ class InventoryItem(Entity):
         self.tracker.transition("cancel_backorder",
             {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": 0},
             {"quantity": backorder.allocated, "warehouse": warehouse}
-        )()
+        )
 
     # Fulfilled item methods
 
@@ -248,10 +256,9 @@ class InventoryItem(Entity):
         if po is None:
             return
 
-        self.tracker.transition("delivery",
-            {"quantity": quantity, "purchase_order_id": purchase_order_id, "date": datetime.now()},
-            {"quantity": quantity, "warehouse": warehouse}
-        )()
+        self.transition("delivery",
+                        {"quantity": quantity, "purchase_order_id": purchase_order_id, "date": datetime.now()},
+                        {"quantity": quantity, "warehouse": warehouse})
 
     def cancel_purchase_order(self, purchase_order_id):
         self.tracker.action("cancel_purchase_order", {"purchase_order_id": purchase_order_id})()
@@ -265,13 +272,11 @@ class InventoryItem(Entity):
         return self.found.quantity(warehouse=warehouse)
 
     def lost_stock(self, quantity, warehouse):
-        self.tracker.transition("lost",
-            {"quantity": quantity, "warehouse": warehouse},
-            {"quantity": quantity, "warehouse": warehouse, "date": datetime.now()}
-        )()
+        self.transition("lost",
+                        {"quantity": quantity, "warehouse": warehouse},
+                        {"quantity": quantity, "warehouse": warehouse, "date": datetime.now()})
 
     def found_stock(self, quantity, warehouse):
-        self.tracker.transition("found",
-            {"quantity": quantity, "warehouse": warehouse, "date": datetime.now()},
-            {"quantity": quantity, "warehouse": warehouse}
-        )()
+        self.transition("found",
+                        {"quantity": quantity, "warehouse": warehouse, "date": datetime.now()},
+                        {"quantity": quantity, "warehouse": warehouse})

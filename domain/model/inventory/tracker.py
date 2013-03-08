@@ -202,6 +202,7 @@ class OnHandState(TrackingState):
         self.items = {}
 
     def _track(self, item):
+        yield self.TransitionValidationResult(True, None)
         new_quantity = item.quantity + self.items.get(item.warehouse, 0)
         self.items.update({item.warehouse: new_quantity})
 
@@ -213,25 +214,25 @@ class OnHandState(TrackingState):
 
     def _reduce_quantity_for(self, warehouse, quantity):
         current_quantity = self.items.get(warehouse)
-        self.items.update({warehouse: max(0, current_quantity - quantity)})
-
-    def commit(self, item):
-        current_quantity = self.items.get(item.warehouse)
-        if item.quantity > current_quantity:
+        if quantity > current_quantity:
             yield self.TransitionValidationResult(False, "Cannot commit quantity greater than on hand")
 
         # Halt before committing transition
         yield self.TransitionValidationResult(True, None)
+        self.items.update({warehouse: max(0, current_quantity - quantity)})
 
-        self._reduce_quantity_for(item.warehouse, item.quantity)
+    def commit(self, item):
+        return self._reduce_quantity_for(item.warehouse, item.quantity)
 
-    def allocate(self, to_state, from_item, to_item):
-        self._reduce_quantity_for(from_item.warehouse, from_item.quantity)
-        to_state.track(to_item)
+    def allocate(self, item):
+        return self._reduce_quantity_for(item.warehouse, item.quantity)
 
-    def lost(self, to_state, from_item, to_item):
-        self._reduce_quantity_for(from_item.warehouse, from_item.quantity)
-        to_state.track(to_item)
+    def lost(self, item):
+        current_quantity = self.items.get(item.warehouse)
+        new_quantity = max(0, current_quantity - item.quantity)
+
+        yield self.TransitionValidationResult(True, None)
+        self.items.update({item.warehouse: new_quantity})
 
 
 class CommittedState(TrackingState):
@@ -260,12 +261,17 @@ class CommittedState(TrackingState):
                 (lambda i: i.order_id is not None),
             ])
 
+        def __repr__(self):
+            return "{0} quantity={1} unverified_quantity={2} order_id={3} warehouse={4}".format(
+                self.__class__, self.quantity, self.unverified_quantity, self.order_id, self.warehouse)
+
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.CommittedItem)
         self.items = {}
         # items is dict, keyed by (order_id, warehouse) tuple: { (order_id, warehouse): item }
 
     def _track(self, item):
+        yield self.TransitionValidationResult(True, None)
         if (item.order_id, item.warehouse) in self.items:
             self.items.get((item.order_id, item.warehouse)).update(item)
         else:
@@ -302,23 +308,29 @@ class CommittedState(TrackingState):
 
     def _reduce_quantity_for(self, order_id, warehouse, quantity):
         item = self.items.get((order_id, warehouse), None)
+        if not item:
+            message = "Could not find commitment for {0} in {1}".format(order_id, warehouse)
+            yield self.TransitionValidationResult(False, message)
 
+        if quantity > item.quantity:
+            message = "Cannot commit {0} (maximum {1} for commitment for {2} in {2}".format(
+                order_id, warehouse, quantity, item.quantity)
+            yield self.TransitionValidationResult(False, message)
+
+        yield self.TransitionValidationResult(True, None)
         if item.quantity == quantity:
             del self.items[(order_id, warehouse)]
         else:
             item.quantity -= quantity
 
-    def backorder_commitment(self, to_state, from_item, to_item):
-        self._reduce_quantity_for(from_item.order_id, from_item.warehouse, from_item.quantity)
-        to_state.track(to_item)
+    def backorder_commitment(self, item):
+        return self._reduce_quantity_for(item.order_id, item.warehouse, item.quantity)
 
-    def revert(self, to_state, from_item, to_item):
-        self._reduce_quantity_for(from_item.order_id, from_item.warehouse, from_item.quantity)
-        to_state.track(to_item)
+    def revert(self, item):
+        return self._reduce_quantity_for(item.order_id, item.warehouse, item.quantity)
 
-    def fulfill(self, to_state, from_item, to_item):
-        self._reduce_quantity_for(from_item.order_id, from_item.warehouse, from_item.quantity)
-        to_state.track(to_item)
+    def fulfill(self, item):
+        return self._reduce_quantity_for(item.order_id, item.warehouse, item.quantity)
 
     def verify(self, item):
         verified_quantity = item.get("quantity", None)
@@ -326,7 +338,7 @@ class CommittedState(TrackingState):
             raise KeyError()
 
         warehouse = item["warehouse"]
-        for item in [v for k,v in self.items.iteritems() if warehouse in k]:
+        for item in [v for k, v in self.items.iteritems() if warehouse == k[1]]:
             # TODO: Verify oldest orders first
 
             if item.quantity <= verified_quantity:
@@ -345,11 +357,14 @@ class CommittedState(TrackingState):
                 item.quantity = verified_quantity
                 verified_quantity = 0
 
-    def verify_out_of_stock(self, to_state, from_item, to_item):
-        item = self.items.get((from_item.order_id, from_item.warehouse))
-        item.unverified_quantity -= from_item.quantity
+    def verify_out_of_stock(self, verify_item):
+        item = self.items.get((verify_item.order_id, verify_item.warehouse), None)
+        if not item:
+            message = "Could not find commitment for {0} in {1}".format(verify_item.order_id, verify_item.warehouse)
+            yield self.TransitionValidationResult(False, message)
 
-        to_state.track(to_item)
+        yield self.TransitionValidationResult(True, None)
+        item.unverified_quantity -= verify_item.quantity
 
 
 class BackorderState(TrackingState):
@@ -378,6 +393,7 @@ class BackorderState(TrackingState):
         self.items = {}
 
     def _track(self, item):
+        yield self.TransitionValidationResult(True, None)
         if self.items.has_key(item.order_id):
             existing = self.items.get(item.order_id)
             item.quantity += existing.quantity
@@ -438,8 +454,9 @@ class FulfilledState(TrackingState):
     def _track(self, item):
         # Invoices are immutable once entered
         if item.invoice_id in self.items:  # pragma: no cover
-            return
+            yield self.TransitionValidationResult(False, "Invoice {0} already exists.".format(item.invoice_id))
 
+        yield self.TransitionValidationResult(True, None)
         self.items.update({item.invoice_id: item})
 
     def get(self, invoice_id):
@@ -479,8 +496,9 @@ class PurchaseOrderState(TrackingState):
     def _track(self, item):
         # Purchase Orders are immutable once entered
         if item.purchase_order_id in self.items: # pragma: no cover
-            return
+            yield self.TransitionValidationResult(False, "Purchase {0} already exists.".format(item.purchase_order_id))
 
+        yield self.TransitionValidationResult(True, None)
         self.items.update({item.purchase_order_id: item})
 
     def get(self, purchase_order_id):
@@ -532,6 +550,7 @@ class LostAndFoundState(TrackingState):
         self.items = []
 
     def _track(self, item):
+        yield self.TransitionValidationResult(True, None)
         self.items.append(item)
 
     def quantity(self, warehouse=None):
@@ -540,6 +559,6 @@ class LostAndFoundState(TrackingState):
         else:
             return reduce(operator.add, [item.quantity for item in self.items], 0)
 
-    def found(self, to_state, from_item, to_item):
-        self.track(from_item)
-        to_state.track(to_item)
+    def found(self, item):
+        yield self.TransitionValidationResult(True, None)
+        self.track(item)

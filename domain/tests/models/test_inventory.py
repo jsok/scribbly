@@ -59,7 +59,16 @@ class InventoryStatesTestCase(TestCase):
 
         self.machine.transition("commit",
             {"quantity": 5, "warehouse": "WHSE001"},
-            {"quantity": 5, "warehouse": "WHSE001", "order_id": "ORD002", "date": datetime.datetime.now()})()
+            {"quantity": 5, "warehouse": "WHSE001", "order_id": "ORD002", "date": datetime.datetime.now()})
+
+        self.assertEquals(5, self.machine.state("OnHand").quantity(), "On Hand quantity not reduced")
+        self.assertEquals(10, self.machine.state("Committed").quantity(), "Wrong number of items committed")
+
+        # Do again but dry_run
+        self.machine.transition("commit",
+            {"quantity": 4, "warehouse": "WHSE001"},
+            {"quantity": 4, "warehouse": "WHSE001", "order_id": "ORD002", "date": datetime.datetime.now()},
+            dry_run=True)
 
         self.assertEquals(5, self.machine.state("OnHand").quantity(), "On Hand quantity not reduced")
         self.assertEquals(10, self.machine.state("Committed").quantity(), "Wrong number of items committed")
@@ -70,8 +79,9 @@ class InventoryOnHandTestCase(TestCase):
     def test_enter_stock_on_hand(self):
         item = InventoryItemFactory.build()
 
-        item.enter_stock_on_hand(10, "WHSE001")
+        result = item.enter_stock_on_hand(10, "WHSE001")
 
+        self.assertTrue(result, "Failed to enter stock On Hand")
         self.assertEquals(10, item.physical_quantity_on_hand(), "Incorrect on hand count set")
 
     def test_enter_stock_on_hand_multiple_locations(self):
@@ -88,9 +98,10 @@ class InventoryOnHandTestCase(TestCase):
     def test_enter_negative_stock(self):
         item = InventoryItemFactory.build()
 
-        item.enter_stock_on_hand(-1, "WHSE001")
+        result = item.enter_stock_on_hand(-1, "WHSE001")
 
-        self.assertEquals(0, item.effective_quantity_on_hand(), "Incorrect on hand count set")
+        self.assertFalse(result, "Enter stock On Hand did not fail")
+        self.assertEquals(0, item.effective_quantity_on_hand(), "On hand count should not have changed")
 
 
 class InventoryCommitNoBufferTestCase(TestCase):

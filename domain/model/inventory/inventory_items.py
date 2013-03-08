@@ -6,6 +6,7 @@ from domain.shared.entity import Entity
 from domain.model.inventory.tracker import TrackingStateMachine
 from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, \
     FulfilledState, PurchaseOrderState, LostAndFoundState
+from domain.model.inventory.tracker import TransitionValidationError
 
 class InventoryItem(Entity):
     """
@@ -68,10 +69,18 @@ class InventoryItem(Entity):
         self.lost = self.tracker.state("Lost")
         self.found = self.tracker.state("Found")
 
+    def transition(self, *args, **kwargs):
+        self.tracker.transition(*args, **kwargs)
+
     # On Hand methods
 
     def enter_stock_on_hand(self, quantity, warehouse):
-        self.on_hand.track({"quantity": quantity, "warehouse": warehouse})
+        try:
+            self.on_hand.track({"quantity": quantity, "warehouse": warehouse})
+        except TransitionValidationError:
+            return False
+
+        return True
 
     def effective_quantity_on_hand(self, warehouse=None):
         return self.on_hand.quantity(warehouse=warehouse)
@@ -102,11 +111,10 @@ class InventoryItem(Entity):
         verified_quantity = min(maximum_verified_quantity, maximum_committable_quantity)
         unverified_quantity = max(0, maximum_committable_quantity - maximum_verified_quantity)
 
-        self.tracker.transition("commit",
-            {"quantity": verified_quantity + unverified_quantity, "warehouse": warehouse},
-            {"quantity": verified_quantity, "unverified_quantity": unverified_quantity, "warehouse": warehouse,
-             "order_id": order_id, "date": datetime.now()}
-        )()
+        self.transition("commit",
+                        {"quantity": verified_quantity + unverified_quantity, "warehouse": warehouse},
+                        {"quantity": verified_quantity, "unverified_quantity": unverified_quantity,
+                         "warehouse": warehouse, "order_id": order_id, "date": datetime.now()})
 
     def fulfill_commitment(self, quantity, warehouse, order_id, invoice_id):
         # XXX: Move checks into states

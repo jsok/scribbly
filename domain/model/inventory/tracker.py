@@ -202,9 +202,15 @@ class OnHandState(TrackingState):
         current_quantity = self.items.get(warehouse)
         self.items.update({warehouse: max(0, current_quantity - quantity)})
 
-    def commit(self, to_state, from_item, to_item):
-        self._reduce_quantity_for(from_item.warehouse, from_item.quantity)
-        to_state.track(to_item)
+    def commit(self, item):
+        current_quantity = self.items.get(item.warehouse)
+        if item.quantity > current_quantity:
+            yield self.TransitionValidationResult(False, "Cannot commit quantity greater than on hand")
+
+        # Halt before committing transition
+        yield self.TransitionValidationResult(True, None)
+
+        self._reduce_quantity_for(item.warehouse, item.quantity)
 
     def allocate(self, to_state, from_item, to_item):
         self._reduce_quantity_for(from_item.warehouse, from_item.quantity)

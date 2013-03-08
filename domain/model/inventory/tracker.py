@@ -23,25 +23,40 @@ class TrackingStateMachine(object):
         """
         if name not in self.transitions:
             raise TransitionValidationError("Unknown transition: {0}".format(name))
-
         from_state, to_state = self.transitions.get(name)
+
         from_item = from_state._validated_item(from_item_dict)
+        if not from_item:
+            raise TransitionValidationError("Could not validate {0}".format(from_item_dict))
         to_item = to_state._validated_item(to_item_dict)
+        if not to_item:
+            raise TransitionValidationError("Could not validate {0}".format(to_item_dict))
 
-        for item in [from_item, to_item]:
-            if not item:
-                raise TransitionValidationError("Could not validate {0}".format(item))
-
-        dry_run = True if dry_run else False
+        # Perform all pre-transition validations on initiating state
         transition = getattr(from_state, name)(from_item)
         for validation in transition:
             if not validation.succeeded():
                 raise TransitionValidationError(validation.message)
-            elif dry_run:
-                # Do not commit transition
-                return
+            else:
+                break  # Halt
 
-        to_state.track(to_item)
+        # Ensure receiving state is able to track item
+        track = to_state._track(to_item)
+        for validation in track:
+            if not validation.succeeded():
+                raise TransitionValidationError(validation.message)
+            else:
+                break  # Halt
+
+        dry_run = True if dry_run else False
+        if not dry_run:
+            # Run to completion
+            for validation in transition:
+                pass
+            for validation in track:
+                pass
+
+        return True
 
     def add_transition(self, name, from_state, to_state):
         """
@@ -107,12 +122,6 @@ class TransitionActionError(Exception):
     pass
 
 
-class TransitionComplete(StopIteration):
-    """
-    Exception raised when transitions are completed.
-    """
-
-
 class TrackingState(object):
     class TrackingItem(object):
         def __init__(self):
@@ -154,10 +163,14 @@ class TrackingState(object):
         """
         if not isinstance(item, self.item_type):
             item = self._validated_item(item)
-        if item:
-            self._track(item)
-        else:
+        if not item:
             raise TransitionValidationError("Could not validate item {0} to track it.".format(item))
+
+        for validation in self._track(item):
+            if not validation.succeeded():
+                raise TransitionValidationError(validation.message)
+
+        return True
 
     def _track(self, item):
         """

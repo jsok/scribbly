@@ -15,29 +15,30 @@ class InventoryStatesTestCase(TestCase):
         self.machine.add_state(CommittedState("Committed"))
         self.machine.add_transition("commit", "OnHand", "Committed")
 
-    @raises(TypeError)
+    @raises(StateValidationError)
     def test_invalid_state(self):
         self.machine.add_state(None)
 
-    @raises(ValueError)
+    @raises(StateValidationError)
     def test_invalid_transition_states(self):
         self.machine.add_transition("commit", "Foo", "Bar")
 
-    @raises(ValueError)
+    @raises(TransitionValidationError)
     def test_invalid_transition(self):
         self.machine.add_transition("foobar", "OnHand", "Committed")
 
+    @raises(TransitionValidationError)
     def test_perform_invalid_transition(self):
         transition = self.machine.transition("foobar", None, None)
         self.assertIsInstance(transition, type(lambda: None), "Transition was not a null op")
 
-    @raises(ValueError)
+    @raises(TransitionActionError)
     def test_invalid_action(self):
         self.machine.add_action("foobar", "OnHand")
 
+    @raises(TransitionActionError)
     def test_perform_invalid_action(self):
-        action = self.machine.action("foobar", {})
-        self.assertIsInstance(action, type(lambda: None), "Action was not a null op")
+        self.machine.action("foobar", {})
 
     def test_perform_action(self):
         # Add a dummy action which always returns True

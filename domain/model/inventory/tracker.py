@@ -13,26 +13,35 @@ class TrackingStateMachine(object):
 
     def add_state(self, state):
         if not isinstance(state, TrackingState):
-            raise TypeError()
+            raise StateValidationError("Provided state is not a TrackingState.")
         self.states.update({state.name: state})
 
-    def transition(self, name, from_item_dict, to_item_dict):
+    def transition(self, name, from_item_dict, to_item_dict, dry_run=None):
         """
         Retrieve the transition function and curry in the to_state.
         Validate the items being passed into each state.
         """
-        null_op = lambda: None
         if name not in self.transitions:
-            return null_op
+            raise TransitionValidationError("Unknown transition: {0}".format(name))
 
         from_state, to_state = self.transitions.get(name)
         from_item = from_state._validated_item(from_item_dict)
         to_item = to_state._validated_item(to_item_dict)
-        if not from_item or not to_item:
-            return null_op
 
-        transition = getattr(from_state, name)
-        return functools.partial(transition, to_state, from_item, to_item)
+        for item in [from_item, to_item]:
+            if not item:
+                raise TransitionValidationError("Could not validate {0}".format(item))
+
+        dry_run = True if dry_run else False
+        transition = getattr(from_state, name)(from_item)
+        for validation in transition:
+            if not validation.succeeded():
+                raise TransitionValidationError(validation.message)
+            elif dry_run:
+                # Do not commit transition
+                return
+
+        to_state.track(to_item)
 
     def add_transition(self, name, from_state, to_state):
         """
@@ -42,13 +51,14 @@ class TrackingStateMachine(object):
         from_state = self.states.get(from_state, None)
         to_state = self.states.get(to_state, None)
 
-        if not (from_state and to_state):
-            raise ValueError()
+        for state in [from_state, to_state]:
+            if not state:
+                raise StateValidationError("State {0} does not exist.".format(state))
 
         if hasattr(from_state, name) and callable(getattr(from_state, name)):
             self.transitions.update({name: (from_state, to_state)})
         else:
-            raise ValueError()
+            raise TransitionValidationError("State {0} does not define transition {1}".format(from_state, name))
 
     def action(self, name, args):
         """
@@ -57,7 +67,7 @@ class TrackingStateMachine(object):
         """
         state = self.actions.get(name, None)
         if not state:  # pragma: no cover
-            return lambda: None
+            raise TransitionActionError("Unknown action: {0}".format(name))
         action = getattr(state, name)
         return functools.partial(action, args)
 
@@ -68,12 +78,39 @@ class TrackingStateMachine(object):
         """
         state = self.states.get(state, None)
         if not state:
-            raise ValueError()
+            raise StateValidationError("State {0} does not exist.".format(state))
 
         if hasattr(state, name):
             self.actions.update({name: state})
         else:
-            raise ValueError()
+            raise TransitionActionError("State {0} does not define action {1}".format(state, name))
+
+
+class StateValidationError(Exception):
+    """
+    An exception to indicate that the transition failed validation and will not be committed.
+    """
+    pass
+
+
+class TransitionValidationError(Exception):
+    """
+    An exception to indicate that the transition failed validation and will not be committed.
+    """
+    pass
+
+
+class TransitionActionError(Exception):
+    """
+    An exception to indicate that the action failed validation and will not be enacted.
+    """
+    pass
+
+
+class TransitionComplete(StopIteration):
+    """
+    Exception raised when transitions are completed.
+    """
 
 
 class TrackingState(object):
@@ -86,6 +123,18 @@ class TrackingState(object):
             Apply each rule to the item and only succeed if all validations pass.
             """
             return reduce(operator.and_, map(lambda f: f(self), self.validations), True)
+
+    class TransitionValidationResult(object):
+        """
+        The result of each validation step in a transition's action.
+        If unsuccessful, the failure message can be checked for a reason.
+        """
+        def __init__(self, success, failure_message):
+            self.success = success
+            self.message = failure_message
+
+        def succeeded(self):
+            return self.success is True
 
     def __init__(self, name, item_type):
         self.name = name
@@ -107,6 +156,8 @@ class TrackingState(object):
             item = self._validated_item(item)
         if item:
             self._track(item)
+        else:
+            raise TransitionValidationError("Could not validate item {0} to track it.".format(item))
 
     def _track(self, item):
         """

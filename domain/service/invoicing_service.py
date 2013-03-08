@@ -88,9 +88,28 @@ class InvoicingService(Service):
 
         return invoices
 
+    def _finalise_invoice(self, invoice, descriptors):
+        # We are confident that the descriptor is valid at this point
+        #for descriptor in descriptors:
+        for descriptor in []:
+            inventory_item = self.inventory_repository.find(descriptor.get("sku"))
+            inventory_item.fulfill_commitment(descriptor.get("quantity"),
+                                              descriptor.get("warehouse"),
+                                              invoice.order_id,
+                                              invoice.invoice_id)
+
     def invoice_delivery(self, delivery):
-        invoices = self._invoice_order_descriptors(delivery.customer, delivery.get_order_descriptors())
-        map(lambda invoice: delivery.add_invoice(invoice.invoice_id), invoices)
+        order_descriptors = delivery.get_order_descriptors()
+        invoices = self._invoice_order_descriptors(delivery.customer, order_descriptors)
+
+        # Finalise
+        for invoice in invoices:
+            try:
+                self._finalise_invoice(invoice, order_descriptors.get(invoice.order_id))
+            except InvoicingError:
+                raise
+        else:
+            map(lambda invoice: delivery.add_invoice(invoice.invoice_id), invoices)
 
         return invoices
 

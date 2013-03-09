@@ -423,7 +423,7 @@ class BackorderState(TrackingState):
 
     def _track(self, item):
         yield self.TransitionValidationResult(True, None)
-        if self.items.has_key(item.order_id):
+        if item.order_id in self.items:
             existing = self.items.get(item.order_id)
             item.quantity += existing.quantity
             item.allocated += existing.allocated
@@ -450,9 +450,16 @@ class BackorderState(TrackingState):
 
         to_state.track(to_item)
 
-    def cancel_backorder(self, to_state, from_item, to_item):
-        del self.items[from_item.order_id]
-        to_state.track(to_item)
+    def cancel_backorder(self, item):
+        if item.order_id not in self.items:
+            message = "Cannot find order {0} in backorders.".format(item.order_id)
+            yield self.TransitionValidationResult(False, message)
+
+        success = self.TransitionValidationResult(True, None)
+        # Return the allocated quantity which needs to be returned to On Hand state.
+        success.add_parameter("allocated", item.allocated)
+        yield success
+        del self.items[item.order_id]
 
 
 class FulfilledState(TrackingState):

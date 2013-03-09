@@ -386,8 +386,8 @@ class InventoryBackordersTestCase(TestCase):
         self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should be empty")
         self.assertEquals(1, item.quantity_backordered(order_id="ORD001"), "Commit should have created 1 backorder")
 
+        self.assertFalse(item.cancel_backorder("WHSE001", "ORDXXX"), "Bogus backorder cancel did not fail")
         item.cancel_backorder("WHSE001", "ORD001")
-        item.cancel_backorder("WHSE001", "ORDXXX")
 
         self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should still be empty")
         self.assertEquals(0, item.quantity_backordered(), "Cancel should have removed backorder")

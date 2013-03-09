@@ -3,7 +3,7 @@ import operator
 
 from domain.shared.entity import Entity
 
-from domain.model.inventory.tracker import TrackingStateMachine
+from domain.model.inventory.tracker import TrackingStateMachine, TransitionParameter
 from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, \
     FulfilledState, PurchaseOrderState, LostAndFoundState
 from domain.model.inventory.tracker import TransitionValidationError
@@ -216,15 +216,14 @@ class InventoryItem(Entity):
         )
 
     def cancel_backorder(self, warehouse, order_id):
-        backorder = self.find_backorder_for_order(order_id)
-        if backorder is None:
-            return
-
         # Cancel the entire backorder and return any allocated stock to OnHand
-        self.tracker.transition("cancel_backorder",
-            {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": 0},
-            {"quantity": backorder.allocated, "warehouse": warehouse}
-        )
+        try:
+            self.transition("cancel_backorder",
+                            {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": 0},
+                            {"quantity": TransitionParameter("allocated"), "warehouse": warehouse})
+        except TransitionValidationError:
+            return False
+        return True
 
     # Fulfilled item methods
 

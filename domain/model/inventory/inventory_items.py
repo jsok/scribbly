@@ -197,23 +197,19 @@ class InventoryItem(Entity):
         return self.backorders.quantity(order_id=order_id)
 
     def fulfill_backorder(self, quantity, warehouse, order_id):
-        backorder = self.find_backorder_for_order(order_id)
+        now = datetime.now()
 
-        # We cannot fulfill the requested quantity
-        if backorder is None or \
-           quantity > self.quantity_backordered(order_id=order_id) or \
-           quantity > self.effective_quantity_on_hand(warehouse=warehouse):
-            return
+        try:
+            self.transition("allocate",
+                            {"quantity": quantity, "warehouse": warehouse},
+                            {"quantity": 0, "date": now, "order_id": order_id, "allocated": quantity})
 
-        self.tracker.transition("allocate",
-            {"quantity": quantity, "warehouse": warehouse},
-            {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": quantity}
-        )
-
-        self.tracker.transition("fulfill_backorder",
-            {"quantity": 0, "date": datetime.now(), "order_id": order_id, "allocated": quantity},
-            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": datetime.now()}
-        )
+            self.transition("fulfill_backorder",
+                            {"quantity": 0, "date": now, "order_id": order_id, "allocated": quantity},
+                            {"quantity": quantity, "warehouse": warehouse, "order_id": order_id, "date": now})
+        except TransitionValidationError:
+            return False
+        return True
 
     def cancel_backorder(self, warehouse, order_id):
         # Cancel the entire backorder and return any allocated stock to OnHand
@@ -251,13 +247,13 @@ class InventoryItem(Entity):
          })
 
     def deliver_purchase_order(self, quantity, warehouse, purchase_order_id):
-        po = self.find_purchase_order(purchase_order_id)
-        if po is None:
-            return
-
-        self.transition("delivery",
-                        {"quantity": quantity, "purchase_order_id": purchase_order_id, "date": datetime.now()},
-                        {"quantity": quantity, "warehouse": warehouse})
+        try:
+            self.transition("delivery",
+                            {"quantity": quantity, "purchase_order_id": purchase_order_id, "date": datetime.now()},
+                            {"quantity": quantity, "warehouse": warehouse})
+        except TransitionValidationError:
+            return False
+        return True
 
     def cancel_purchase_order(self, purchase_order_id):
         self.tracker.action("cancel_purchase_order", {"purchase_order_id": purchase_order_id})()

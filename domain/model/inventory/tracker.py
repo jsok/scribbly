@@ -242,7 +242,11 @@ class OnHandState(TrackingState):
             return reduce(operator.add, [qty for qty in self.items.values()], 0)
 
     def _reduce_quantity_for(self, warehouse, quantity):
-        current_quantity = self.items.get(warehouse)
+        current_quantity = self.items.get(warehouse, None)
+        if not current_quantity:
+            message = "Cannot locate items in warehouse {0}.".format(warehouse)
+            yield self.TransitionValidationResult(False, message)
+
         if quantity > current_quantity:
             yield self.TransitionValidationResult(False, "Cannot commit quantity greater than on hand")
 
@@ -434,21 +438,28 @@ class BackorderState(TrackingState):
 
     def quantity(self, order_id=None):
         if order_id:
-            return 0 if not self.items.has_key(order_id) else self.items.get(order_id).quantity
+            return 0 if order_id not in self.items else self.items.get(order_id).quantity
         else:
             return reduce(operator.add, [item.quantity for item in self.items.values()], 0)
 
-    def fulfill_backorder(self, to_state, from_item, to_item):
-        item = self.items.get(from_item.order_id)
+    def fulfill_backorder(self, item):
+        backorder = self.items.get(item.order_id)
+        if not backorder:
+            message = "Could not find backorder for order {0}.".format(item.order_id)
+            yield self.TransitionValidationResult(False, message)
 
-        # It completely fulfilled, backorder can be removed
-        if item.quantity == from_item.allocated:
-            del self.items[from_item.order_id]
+        if item.quantity > backorder.quantity:
+            message = "Cannot fulfill quantity {0}, greater than backorder quantity {1}.".format(
+                item.quantity, backorder.quantity)
+            yield self.TransitionValidationResult(False, message)
+
+        yield self.TransitionValidationResult(True, None)
+        # If completely fulfilled, backorder can be removed
+        if backorder.quantity == item.allocated:
+            del self.items[item.order_id]
         else:
-            item.quantity -= from_item.allocated
-            item.allocated -= from_item.allocated
-
-        to_state.track(to_item)
+            backorder.quantity -= item.allocated
+            backorder.allocated -= item.allocated
 
     def cancel_backorder(self, item):
         if item.order_id not in self.items:
@@ -546,20 +557,22 @@ class PurchaseOrderState(TrackingState):
         else:
             return reduce(operator.add, [item.quantity for item in self.items.values()], 0)
 
-    def delivery(self, to_state, from_item, to_item):
-        item = self.items.get(from_item.purchase_order_id)
+    def delivery(self, item):
+        purchase_order = self.items.get(item.purchase_order_id)
+        if not purchase_order:
+            message = "Could not find Purchase Order {0}.".format(item.purchase_order_id)
+            yield self.TransitionValidationResult(False, message)
 
-        if item.quantity == from_item.quantity:
-            del self.items[item.purchase_order_id]
+        yield self.TransitionValidationResult(True, None)
+        if purchase_order.quantity == item.quantity:
+            del self.items[purchase_order.purchase_order_id]
         else:
-            item.quantity -= from_item.quantity
-
-        to_state.track(to_item)
+            purchase_order.quantity -= item.quantity
 
     def cancel_purchase_order(self, args):
         # We don't usually allow this, but there is no logical transition for it
         if "purchase_order_id" not in args:
-            return
+            raise TransitionActionError("Purchase Order ID not specified.")
         self.items.pop(args["purchase_order_id"])
 
 

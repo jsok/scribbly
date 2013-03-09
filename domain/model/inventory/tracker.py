@@ -500,7 +500,7 @@ class FulfilledState(TrackingState):
 
     def _track(self, item):
         # Invoices are immutable once entered
-        if item.invoice_id in self.items:  # pragma: no cover
+        if item.invoice_id in self.items:
             yield self.TransitionValidationResult(False, "Invoice {0} already exists.".format(item.invoice_id))
 
         yield self.TransitionValidationResult(True, None)
@@ -542,7 +542,7 @@ class PurchaseOrderState(TrackingState):
 
     def _track(self, item):
         # Purchase Orders are immutable once entered
-        if item.purchase_order_id in self.items: # pragma: no cover
+        if item.purchase_order_id in self.items:
             yield self.TransitionValidationResult(False, "Purchase {0} already exists.".format(item.purchase_order_id))
 
         yield self.TransitionValidationResult(True, None)

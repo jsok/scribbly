@@ -28,17 +28,21 @@ class TrackingStateMachine(object):
         from_item = from_state._validated_item(from_item_dict)
         if not from_item:
             raise TransitionValidationError("Could not validate {0}".format(from_item_dict))
-        to_item = to_state._validated_item(to_item_dict)
-        if not to_item:
-            raise TransitionValidationError("Could not validate {0}".format(to_item_dict))
 
         # Perform all pre-transition validations on initiating state
         transition = getattr(from_state, name)(from_item)
+        validation_parameters = {}
         for validation in transition:
             if not validation.succeeded():
                 raise TransitionValidationError(validation.message)
             else:
+                validation_parameters = validation.parameters
                 break  # Halt
+
+        # Update any TransitionParameters with their values and validate to_item
+        to_item = to_state._validated_item(to_item_dict, parameters=validation_parameters)
+        if not to_item:
+            raise TransitionValidationError("Could not validate {0}".format(to_item_dict))
 
         # Ensure receiving state is able to track item
         track = to_state._track(to_item)
@@ -122,6 +126,21 @@ class TransitionActionError(Exception):
     pass
 
 
+class TransitionParameter(object):
+    """
+    A Transition Parameter defines the communication protocol between the "from" state to the "to" state.
+    The "to" state declares its unknown item parameters with a name which will be matched with any parameters
+    emitted by the "from" state.
+    The "to" state can optionally define a default value if the "from" state never emits the required parameter.
+    If the "to" state does not define a default and no value is returned by the "from" state an exception will be
+    raised and treated as a TransitionValidationError.
+    The "from" state can use the same value argument to communicate back to the "to" state its value.
+    """
+    def __init__(self, name, value=None):
+        self.name = name
+        self.value = value if value else None
+
+
 class TrackingState(object):
     class TrackingItem(object):
         def __init__(self):
@@ -141,15 +160,25 @@ class TrackingState(object):
         def __init__(self, success, failure_message):
             self.success = success
             self.message = failure_message
+            self.parameters = {}
 
         def succeeded(self):
             return self.success is True
+
+        def add_parameter(self, name, value):
+            self.parameters.update({name: value})
 
     def __init__(self, name, item_type):
         self.name = name
         self.item_type = item_type
 
-    def _validated_item(self, item_dict):
+    def _validated_item(self, item_dict, parameters=None):
+        parameters = parameters if parameters else {}
+        unvalidated_params = {v.name: k for k, v in item_dict.iteritems() if isinstance(v, TransitionParameter)}
+
+        for name, value in parameters.iteritems():
+            item_dict.update({unvalidated_params[name]: value})
+
         item = self.item_type(item_dict)
         return item if item.validate() else None
 

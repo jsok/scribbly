@@ -3,10 +3,11 @@ import operator
 
 from domain.shared.entity import Entity
 
-from domain.model.inventory.tracker import TrackingStateMachine, TransitionParameter
-from domain.model.inventory.tracker import OnHandState, CommittedState, BackorderState, \
+from domain.model.inventory.tracking_state_machine import TrackingStateMachine, TransitionParameter
+from domain.model.inventory.tracking_state_machine import OnHandState, CommittedState, BackorderState, \
     FulfilledState, PurchaseOrderState, LostAndFoundState
-from domain.model.inventory.tracker import TransitionValidationError
+from domain.model.inventory.tracking_state_machine import TransitionValidationError
+
 
 class InventoryItem(Entity):
     """

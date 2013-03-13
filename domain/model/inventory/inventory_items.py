@@ -94,7 +94,7 @@ class InventoryItem(Entity):
     # Commited Items methods
 
     def find_committed_for_order(self, order_id):
-        return self.committed.get(order_id)
+        return self.committed.get_by_order(order_id)
 
     def quantity_committed(self, warehouse=None):
         return self.committed.quantity(warehouse=warehouse)
@@ -225,7 +225,7 @@ class InventoryItem(Entity):
     # Fulfilled item methods
 
     def find_fulfillment_for_invoice(self, invoice_id):
-        return self.fulfilled.get(invoice_id=invoice_id)
+        return self.fulfilled.get(invoice_id)
 
     def quantity_fulfilled(self, invoice_id=None):
         return self.fulfilled.quantity(invoice_id=invoice_id)

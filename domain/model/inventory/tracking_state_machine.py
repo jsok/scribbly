@@ -152,6 +152,14 @@ class TrackingState(object):
             """
             return reduce(operator.and_, map(lambda f: f(self), self.validations), True)
 
+        def export(self):
+            """
+            TrackingItems export themself to the world as a dict, so external consumers can determine their properties.
+            """
+            item_dict = self.__dict__.copy()
+            item_dict.pop("validations")
+            return item_dict
+
     class TransitionValidationResult(object):
         """
         The result of each validation step in a transition's action.
@@ -210,6 +218,15 @@ class TrackingState(object):
     def quantity(self, key=None):
         """
         Quantity of items tracked, most implementors will have additional keys to filter on.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+    def get(self, key):
+        return self._get(key).export()
+
+    def _get(self, key=None):
+        """
+        Internal get method to retrieve a tracked item by specified key.
         """
         raise NotImplementedError()  # pragma: no cover
 
@@ -310,7 +327,7 @@ class CommittedState(TrackingState):
         else:
             self.items[(item.order_id, item.warehouse)] = item
 
-    def get(self, order_id):
+    def get_by_order(self, order_id):
         matches = {}
         for key, item in self.items.iteritems():
             if order_id in key:
@@ -433,7 +450,7 @@ class BackorderState(TrackingState):
             item.allocated += existing.allocated
         self.items.update({item.order_id: item})
 
-    def get(self, order_id):
+    def _get(self, order_id):
         return self.items.get(order_id, None)
 
     def quantity(self, order_id=None):
@@ -506,7 +523,7 @@ class FulfilledState(TrackingState):
         yield self.TransitionValidationResult(True, None)
         self.items.update({item.invoice_id: item})
 
-    def get(self, invoice_id):
+    def _get(self, invoice_id):
         return self.items.get(invoice_id, None)
 
     def quantity(self, invoice_id=None):
@@ -548,7 +565,7 @@ class PurchaseOrderState(TrackingState):
         yield self.TransitionValidationResult(True, None)
         self.items.update({item.purchase_order_id: item})
 
-    def get(self, purchase_order_id):
+    def _get(self, purchase_order_id):
         return self.items.get(purchase_order_id, None)
 
     def quantity(self, purchase_order_id=None):

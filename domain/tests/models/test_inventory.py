@@ -421,8 +421,8 @@ class InventoryFulfilledTestCase(TestCase):
         self.assertEquals(1, item.quantity_fulfilled("INV001"), "Item was not fulfilled")
 
         invoice = item.find_fulfillment_for_invoice("INV001")
-        self.assertEquals(1, invoice.quantity, "Invoice has incorrect quantity")
-        self.assertEquals("ORD001", invoice.order_id, "Invoice has incorrect Order")
+        self.assertEquals(1, invoice["quantity"], "Invoice has incorrect quantity")
+        self.assertEquals("ORD001", invoice["order_id"], "Invoice has incorrect Order")
 
         # Using the same invoice twice should not commit
         item.fulfill_commitment(1, "WHSE001", "ORD001", "INV001")

@@ -4,7 +4,7 @@ from unittest import TestCase, skip
 from nose.tools import raises
 
 from domain.tests.factories.inventory import InventoryItemFactory
-from domain.model.inventory.tracker import *
+from domain.model.inventory.tracking_state_machine import *
 
 
 class InventoryStatesTestCase(TestCase):
@@ -169,6 +169,20 @@ class InventoryCommitNoBufferTestCase(TestCase):
         self.assertEquals(3, item.quantity_backordered(), "Incorrect number of backorders after commit")
         self.assertEquals(1, item.quantity_backordered(order_id="ORD003"), "ORD003 should now have backorder qty of 1")
         self.assertEquals(1, item.quantity_backordered(order_id="ORD004"), "ORD004 should now have backorder qty of 1")
+
+    def test_multiple_commit_to_same_order(self):
+        item = InventoryItemFactory.build()
+
+        item.enter_stock_on_hand(2, "WHSE001")
+
+        # Should be same as commit(2)
+        item.commit(1, "WHSE001", "ORD001")
+        item.commit(1, "WHSE001", "ORD001")
+
+        committed_items = item.find_committed_for_order("ORD001")
+
+        self.assertIsNotNone(committed_items, "No items were committed")
+        self.assertEqual(2, item.quantity_committed(), "Not exactly two items were committed")
 
     def test_backorder_commitment(self):
         item = InventoryItemFactory.build()

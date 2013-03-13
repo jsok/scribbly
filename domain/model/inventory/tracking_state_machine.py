@@ -306,7 +306,7 @@ class CommittedState(TrackingState):
     def _track(self, item):
         yield self.TransitionValidationResult(True, None)
         if (item.order_id, item.warehouse) in self.items:
-            self.items.get((item.order_id, item.warehouse)).update(item)
+            self.items.get((item.order_id, item.warehouse)).quantity += item.quantity
         else:
             self.items[(item.order_id, item.warehouse)] = item
 

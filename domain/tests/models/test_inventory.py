@@ -252,8 +252,12 @@ class InventoryCommitWithBufferTestCase(TestCase):
         self.assertEquals(1, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Incorrect quantity was automatically verified")
 
+        self.assertTrue(item.needs_stock_verified("ORD001"), "Inventory item should require verification")
+
         # Verify the original stock level was correct
         item.verify_stock_level(5, "WHSE001")
+
+        self.assertFalse(item.needs_stock_verified("ORD001"), "Inventory item should no longer require verification")
 
         self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
         self.assertEquals(4, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],

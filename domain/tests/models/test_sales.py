@@ -1,7 +1,7 @@
 from datetime import datetime
 from unittest import TestCase, skip
 
-from domain.tests.factories.sales import OrderFactory, PackingListFactory, InvoiceFactory
+from domain.tests.factories.sales import OrderFactory, InvoiceFactory
 
 
 class SalesOrderTestCase(TestCase):
@@ -35,39 +35,6 @@ class SalesOrderTestCase(TestCase):
         order.add_line_item("PROD000", 1, 1.00, 2.0) # 200% discount
 
         self.assertEquals(0.0, order.total_amount(), "Order amount should be zero, not negative")
-
-
-class PackingListTestCase(TestCase):
-    def test_packing_list_empty(self):
-        pl = PackingListFactory.build()
-        self.assertIsNone(pl.find_item("PROD001"), "Packing list should have been empty")
-
-    def test_packing_list_add_item(self):
-        pl = PackingListFactory.build()
-        pl.add_item("PROD001", 1, "WHSE001", "ORD001")
-
-        self.assertIsNotNone(pl.find_item("PROD001"), "Could not find PROD001 in packing list.")
-        self.assertTrue("ORD001" in pl.list_orders(), "Order ORD001 not found in list of requested orders")
-
-    def test_packing_list_item_from_multiple_orders(self):
-        pl = PackingListFactory.build()
-        pl.add_item("PROD001", 1, "WHSE001", "ORD001")
-        pl.add_item("PROD001", 1, "WHSE002", "ORD001")
-        pl.add_item("PROD002", 3, "WHSE001", "ORD002")
-        pl.add_item("PROD003", 7, "WHSE001", "ORD003")
-
-        for sku in ["PROD001", "PROD002", "PROD003"]:
-            self.assertTrue(sku in pl.list_skus(), "Could not find {0} in SKU list".format(sku))
-
-        for entry in pl.find_item("PROD001"):
-            if entry["warehouse"] == "WHSE001":
-                self.assertEquals(1, entry["quantity"], "Wrong quantity for WHSE001")
-                self.assertEquals("ORD001", entry["order_id"], "Wrong order id")
-            elif entry["warehouse"] == "WHSE002":
-                self.assertEquals(1, entry["quantity"], "Wrong quantity for WHSE001")
-                self.assertEquals("ORD001", entry["order_id"], "Wrong order id")
-            else:
-                self.assertTrue(False, "Could not find either warehouse in entry for PROD001")
 
 
 class SalesInvoiceTestCase(TestCase):

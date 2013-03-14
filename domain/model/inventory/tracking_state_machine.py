@@ -335,6 +335,12 @@ class CommittedState(TrackingState):
 
         return matches
 
+    def is_verified(self, order_id):
+        for key, item in self.items.iteritems():
+            if order_id in key and item.unverified_quantity > 0:
+                return False
+        return True
+
     def get_unverified(self, warehouse):
         unverified_items = []
 

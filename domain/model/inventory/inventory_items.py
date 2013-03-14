@@ -163,6 +163,9 @@ class InventoryItem(Entity):
 
         return True
 
+    def needs_stock_verified(self, order_id):
+        return not self.committed.is_verified(order_id)
+
     def verify_stock_level(self, quantity, warehouse):
         # XXX: Ensure atomicity
 

@@ -46,17 +46,17 @@ class InvoicingServiceTestCase(TestCase):
         self.order_repository.find = Mock(side_effect=lambda order_id: orders.get(order_id))
 
         prod1 = InventoryItemFactory.build(sku="PROD001")
-        prod1.enter_stock_on_hand(10, "WHSE001")
-        prod1.enter_stock_on_hand(10, "WHSE002")
-        prod1.commit(1, "WHSE001", "ORD001")
-        prod1.commit(2, "WHSE002", "ORD002")
+        prod1.enter_stock_on_hand(10)
+        prod1.enter_stock_on_hand(10)
+        prod1.commit(1, "ORD001")
+        prod1.commit(2, "ORD002")
 
         prod2 = InventoryItemFactory.build(sku="PROD002")
-        prod2.enter_stock_on_hand(10, "WHSE001")
-        prod2.enter_stock_on_hand(10, "WHSE002")
-        prod2.commit(3, "WHSE001", "ORD001")
-        prod2.commit(2, "WHSE001", "ORD002")
-        prod2.commit(2, "WHSE002", "ORD002")
+        prod2.enter_stock_on_hand(10)
+        prod2.enter_stock_on_hand(10)
+        prod2.commit(3, "ORD001")
+        prod2.commit(2, "ORD002")
+        prod2.commit(2, "ORD002")
 
         inventory = {
             "PROD001": prod1,
@@ -68,13 +68,13 @@ class InvoicingServiceTestCase(TestCase):
 
         self.order_descriptors = {
             "ORD001": [
-                {"sku": "PROD001", "quantity": 1, "warehouse": "WHSE001"},
-                {"sku": "PROD002", "quantity": 3, "warehouse": "WHSE001"}
+                {"sku": "PROD001", "quantity": 1},
+                {"sku": "PROD002", "quantity": 3}
             ],
             "ORD002": [
-                {"sku": "PROD001", "quantity": 2, "warehouse": "WHSE002"},
-                {"sku": "PROD002", "quantity": 2, "warehouse": "WHSE001"},
-                {"sku": "PROD002", "quantity": 2, "warehouse": "WHSE002"}
+                {"sku": "PROD001", "quantity": 2},
+                {"sku": "PROD002", "quantity": 2},
+                {"sku": "PROD002", "quantity": 2}
             ],
         }
 
@@ -130,8 +130,8 @@ class InvoicingServiceTestCase(TestCase):
         service = InvoicingService(self.customer_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
 
-        # Order descriptor has a commitment for a warehouse that doesn't exist
-        self.order_descriptors["ORD001"].append({"sku": "PROD001", "quantity": 1, "warehouse": "WHSE00X"})
+        # Order descriptor has a commitment for wrong quantity
+        self.order_descriptors["ORD001"].append({"sku": "PROD001", "quantity": 10})
 
         service._invoice_order_descriptors("Customer", self.order_descriptors)
 
@@ -167,16 +167,14 @@ class InvoicingServiceTestCase(TestCase):
 
     def test_invoice_delivery(self):
         delivery = DeliveryFactory.build()
-        delivery.add_item("PROD001", 1, "WHSE001", "ORD001")
-        delivery.add_item("PROD002", 3, "WHSE001", "ORD001")
-        delivery.add_item("PROD001", 2, "WHSE002", "ORD002")
-        delivery.add_item("PROD002", 2, "WHSE001", "ORD002")
-        delivery.add_item("PROD002", 2, "WHSE002", "ORD002")
-        delivery.adjust_deliver_quantity("PROD001", 1, "WHSE001", "ORD001")
-        delivery.adjust_deliver_quantity("PROD002", 3, "WHSE001", "ORD001")
-        delivery.adjust_deliver_quantity("PROD001", 2, "WHSE002", "ORD002")
-        delivery.adjust_deliver_quantity("PROD002", 2, "WHSE001", "ORD002")
-        delivery.adjust_deliver_quantity("PROD002", 2, "WHSE002", "ORD002")
+        delivery.add_item("PROD001", 1, "ORD001")
+        delivery.add_item("PROD002", 3, "ORD001")
+        delivery.add_item("PROD001", 2, "ORD002")
+        delivery.add_item("PROD002", 4, "ORD002")
+        delivery.adjust_deliver_quantity("PROD001", 1, "ORD001")
+        delivery.adjust_deliver_quantity("PROD002", 3, "ORD001")
+        delivery.adjust_deliver_quantity("PROD001", 2, "ORD002")
+        delivery.adjust_deliver_quantity("PROD002", 4, "ORD002")
 
         service = InvoicingService(self.customer_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
@@ -193,6 +191,6 @@ class InvoicingServiceTestCase(TestCase):
 
         inv_ord002 = [inv for inv in invoices if inv.order_id == "ORD002"][0]
         self.assertEquals("CUST-PO002", inv_ord002.customer_reference, "Incorrect customer reference")
-        self.assertEquals(3, len(inv_ord002.line_items), "Invoice should only contain 3 line items")
+        self.assertEquals(2, len(inv_ord002.line_items), "Invoice should only contain 2 line items")
         self.assertEquals(242.00, inv_ord002.total_amount(), "Invoice total is incorrect")
         self.assertFalse(inv_ord002.finalised, "Invoice should not yet be finalised")

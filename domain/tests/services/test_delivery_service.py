@@ -42,17 +42,17 @@ class DeliveryServiceTestCase(TestCase):
         self.order_repository.find = Mock(side_effect=lambda order_id: orders.get(order_id))
 
         prod1 = InventoryItemFactory.build(sku="PROD001")
-        prod1.enter_stock_on_hand(10, "WHSE001")
-        prod1.enter_stock_on_hand(10, "WHSE002")
-        prod1.commit(1, "WHSE001", "ORD001")
-        prod1.commit(2, "WHSE002", "ORD002")
+        prod1.enter_stock_on_hand(10)
+        prod1.enter_stock_on_hand(10)
+        prod1.commit(1, "ORD001")
+        prod1.commit(2, "ORD002")
 
         prod2 = InventoryItemFactory.build(sku="PROD002")
-        prod2.enter_stock_on_hand(10, "WHSE001")
-        prod2.enter_stock_on_hand(10, "WHSE002")
-        prod2.commit(3, "WHSE001", "ORD001")
-        prod2.commit(2, "WHSE001", "ORD002")
-        prod2.commit(2, "WHSE002", "ORD002")
+        prod2.enter_stock_on_hand(10)
+        prod2.enter_stock_on_hand(10)
+        prod2.commit(3, "ORD001")
+        prod2.commit(2, "ORD002")
+        prod2.commit(2, "ORD002")
 
         inventory = {
             "PROD001": prod1,
@@ -83,5 +83,4 @@ class DeliveryServiceTestCase(TestCase):
         self.assertTrue(call("PROD002") in self.inventory_repository.find.call_args_list, "PROD002 was not queried for")
 
         for sku in ["PROD001", "PROD002"]:
-            self.assertIsNotNone(delivery._find_item(sku, "WHSE001", "ORD001"),
-                                 "Could not find {0} in delivery".format(sku))
+            self.assertIsNotNone(delivery._find_item(sku, "ORD001"), "Could not find {0} in delivery".format(sku))

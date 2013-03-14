@@ -1,7 +1,7 @@
 from datetime import datetime
 from unittest import TestCase, skip
 
-from domain.tests.factories.sales import OrderFactory, PackingListFactory, InvoiceFactory
+from domain.tests.factories.sales import OrderFactory, InvoiceFactory
 
 
 class SalesOrderTestCase(TestCase):

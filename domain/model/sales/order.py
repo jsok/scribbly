@@ -5,11 +5,11 @@ from domain.model.sales.line_item import LineItem
 
 
 class Order(Entity):
-    def __init__(self, order_id, customer, order_date, line_items=None, customer_reference=None):
+    def __init__(self, order_id, customer, order_date, customer_reference=None):
         self.order_id = order_id
         self.customer = customer
         self.order_date = order_date
-        self.line_items = line_items if line_items else []
+        self.line_items = []
         self.acknowledgement_date = None
         self.customer_reference = customer_reference if customer_reference else None
 

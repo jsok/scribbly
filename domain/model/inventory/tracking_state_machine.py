@@ -55,10 +55,12 @@ class TrackingStateMachine(object):
         dry_run = True if dry_run else False
         if not dry_run:
             # Run to completion
-            for validation in transition:
-                pass
-            for validation in track:
-                pass
+            for validation in transition:  # pragma: no cover
+                if validation:
+                    raise TransitionFatalError("Transition from-state encountered fatal error")
+            for validation in track:  # pragma: no cover
+                if validation:
+                    raise TransitionFatalError("Transition to-state encountered fatal error")
 
         return True
 
@@ -117,6 +119,12 @@ class TransitionValidationError(Exception):
     An exception to indicate that the transition failed validation and will not be committed.
     """
     pass
+
+
+class TransitionFatalError(Exception):
+    """
+    An unrecoverable error occured during a transition, most likely leaving the transition in a half-committed state.
+    """
 
 
 class TransitionActionError(Exception):

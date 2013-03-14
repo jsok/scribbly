@@ -17,7 +17,7 @@ class InvoicingService(Service):
 
     def _validate_order_descriptor(self, order_descriptor):
         for descriptor in order_descriptor:
-            expected_keys = ("sku", "quantity", "warehouse")
+            expected_keys = ("sku", "quantity")
             descriptor_keys = set(descriptor.keys())
 
             if not descriptor_keys.issubset(expected_keys):
@@ -28,7 +28,7 @@ class InvoicingService(Service):
         An order descriptor is a subset of line items which need to be invoiced.
 
         Format:
-        { ORDER_ID: [{ sku: X, quantity: Y, warehouse: Z }, ], }
+        { ORDER_ID: [{ sku: X, quantity: Y }, ], }
 
         If ORDER_ID is None, this is an ad-hoc invoice (i.e. no originating order document).
 
@@ -64,15 +64,13 @@ class InvoicingService(Service):
 
             for descriptor in descriptors:
                 sku = descriptor.get("sku")
-                warehouse = descriptor.get("warehouse")
                 quantity = descriptor.get("quantity")
 
                 inventory_item = self.inventory_repository.find(sku)
                 if not inventory_item:
                     raise InvoicingError("Could not find SKU %s in Inventory" % sku)
 
-                commitments = inventory_item.find_committed_for_order(order_id)
-                commitment = commitments.get((order_id, warehouse), None)
+                commitment = inventory_item.find_committed_for_order(order_id)
                 if not commitment:
                     raise InvoicingError("Inventory commitment does not exist")
 
@@ -94,13 +92,11 @@ class InvoicingService(Service):
         for descriptor in []:
             inventory_item = self.inventory_repository.find(descriptor.get("sku"))
             success = inventory_item.fulfill_commitment(descriptor.get("quantity"),
-                                                        descriptor.get("warehouse"),
                                                         invoice.order_id,
                                                         invoice.invoice_id)
             if not success:
-                message = "Quantity={0}, Warehouse={1}, Order ID={2}, Invoice ID={3}".format(
+                message = "Quantity={0}, Order ID={2}, Invoice ID={3}".format(
                     descriptor.get("quantity"),
-                    descriptor.get("warehouse"),
                     invoice.order_id,
                     invoice.invoice_id)
                 raise InvoicingError("Could not fulfill commitment for: {0}".format(message))

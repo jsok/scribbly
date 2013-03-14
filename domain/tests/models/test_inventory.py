@@ -340,6 +340,10 @@ class InventoryBackordersTestCase(TestCase):
         self.assertEquals(0, item.effective_quantity_on_hand(), "Warehouse should have no stock")
         self.assertEquals(2, item.quantity_backordered(), "Commit should have created 2 backorders")
 
+        backorder = item.find_backorder_for_order("ORD001")
+        self.assertIsNotNone(backorder, "Could not find backorder for ORD001")
+        self.assertEquals(2, backorder["quantity"], "Backorder item has incorrect quantity")
+
         item.enter_stock_on_hand(1)
         self.assertEquals(1, item.effective_quantity_on_hand(), "Warehouse should have qty of 1 on hand")
 
@@ -373,9 +377,18 @@ class InventoryBackordersTestCase(TestCase):
         self.assertEquals(1, item.quantity_backordered(), "Commit should have created 1 backorder")
 
         # Impossible fulfillment
-        item.fulfill_backorder(2, "ORD001")
+        result = item.fulfill_backorder(2, "ORD001")
+        self.assertFalse(result, "Backorder fulfillment should have failed")
         self.assertEquals(1, item.effective_quantity_on_hand(), "Warehouse qty should not have changed")
         self.assertEquals(1, item.quantity_backordered(), "Backorder qty should not have changed")
+
+    def test_fulfill_backorder_with_bad_order_id(self):
+        item = InventoryItemFactory.build()
+        item.enter_stock_on_hand(10)
+
+        # Bogus backorder
+        result = item.fulfill_backorder(1, "ORDXXX")
+        self.assertFalse(result, "Bogus backorder fulfillment should have failed")
 
     def test_cancel_backorder(self):
         item = InventoryItemFactory.build()

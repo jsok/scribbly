@@ -424,6 +424,12 @@ class BackorderState(TrackingState):
         self.items = {}
 
     def _track(self, item):
+        # Only allow tracking allocations if they already exist
+        if item.allocated > 0 and item.order_id not in self.items:
+            message = "Cannot allocate quantity {0} since backorder for order {1} does not exist".format(
+                item.allocated, item.order_id)
+            yield self.TransitionValidationResult(False, message)
+
         yield self.TransitionValidationResult(True, None)
         if item.order_id in self.items:
             existing = self.items.get(item.order_id)
@@ -441,7 +447,7 @@ class BackorderState(TrackingState):
             return reduce(operator.add, [item.quantity for item in self.items.values()], 0)
 
     def fulfill_backorder(self, item):
-        backorder = self.items.get(item.order_id)
+        backorder = self.items.get(item.order_id, None)
         if not backorder:
             message = "Could not find backorder for order {0}.".format(item.order_id)
             yield self.TransitionValidationResult(False, message)

@@ -93,10 +93,17 @@ class InvoicingService(Service):
         #for descriptor in descriptors:
         for descriptor in []:
             inventory_item = self.inventory_repository.find(descriptor.get("sku"))
-            inventory_item.fulfill_commitment(descriptor.get("quantity"),
-                                              descriptor.get("warehouse"),
-                                              invoice.order_id,
-                                              invoice.invoice_id)
+            success = inventory_item.fulfill_commitment(descriptor.get("quantity"),
+                                                        descriptor.get("warehouse"),
+                                                        invoice.order_id,
+                                                        invoice.invoice_id)
+            if not success:
+                message = "Quantity={0}, Warehouse={1}, Order ID={2}, Invoice ID={3}".format(
+                    descriptor.get("quantity"),
+                    descriptor.get("warehouse"),
+                    invoice.order_id,
+                    invoice.invoice_id)
+                raise InvoicingError("Could not fulfill commitment for: {0}".format(message))
 
     def invoice_delivery(self, delivery):
         order_descriptors = delivery.get_order_descriptors()

@@ -83,5 +83,4 @@ class DeliveryServiceTestCase(TestCase):
         self.assertTrue(call("PROD002") in self.inventory_repository.find.call_args_list, "PROD002 was not queried for")
 
         for sku in ["PROD001", "PROD002"]:
-            self.assertIsNotNone(delivery._find_item(sku, "WHSE001", "ORD001"),
-                                 "Could not find {0} in delivery".format(sku))
+            self.assertIsNotNone(delivery._find_item(sku, "ORD001"), "Could not find {0} in delivery".format(sku))

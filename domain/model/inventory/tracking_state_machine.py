@@ -224,7 +224,7 @@ class TrackingState(object):
     def get(self, key):
         return self._get(key).export()
 
-    def _get(self, key=None):
+    def _get(self, key):
         """
         Internal get method to retrieve a tracked item by specified key.
         """
@@ -236,53 +236,40 @@ class OnHandState(TrackingState):
         def __init__(self, properties):
             super(self.__class__, self).__init__()
             self.quantity = properties.get("quantity", 0)
-            self.warehouse = properties.get("warehouse", None)
 
             self.validations.extend([
                 (lambda i: i.quantity >= 0),
-                (lambda i: i.warehouse is not None),
             ])
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.OnHandItem)
-        self.items = {}
+        self.item = self.OnHandItem({"quantity": 0})
 
     def _track(self, item):
         yield self.TransitionValidationResult(True, None)
-        new_quantity = item.quantity + self.items.get(item.warehouse, 0)
-        self.items.update({item.warehouse: new_quantity})
+        self.item.quantity += item.quantity
 
-    def quantity(self, warehouse=None):
-        if warehouse:
-            return self.items.get(warehouse, 0)
-        else:
-            return reduce(operator.add, [qty for qty in self.items.values()], 0)
+    def quantity(self, key=None):
+        return self.item.quantity
 
-    def _reduce_quantity_for(self, warehouse, quantity):
-        current_quantity = self.items.get(warehouse, None)
-        if not current_quantity:
-            message = "Cannot locate items in warehouse {0}.".format(warehouse)
-            yield self.TransitionValidationResult(False, message)
-
+    def _reduce_quantity_by(self, quantity):
+        current_quantity = self.item.quantity
         if quantity > current_quantity:
             yield self.TransitionValidationResult(False, "Cannot commit quantity greater than on hand")
 
         # Halt before committing transition
         yield self.TransitionValidationResult(True, None)
-        self.items.update({warehouse: max(0, current_quantity - quantity)})
+        self.item.quantity = max(0, current_quantity - quantity)
 
     def commit(self, item):
-        return self._reduce_quantity_for(item.warehouse, item.quantity)
+        return self._reduce_quantity_by(item.quantity)
 
     def allocate(self, item):
-        return self._reduce_quantity_for(item.warehouse, item.quantity)
+        return self._reduce_quantity_by(item.quantity)
 
     def lost(self, item):
-        current_quantity = self.items.get(item.warehouse)
-        new_quantity = max(0, current_quantity - item.quantity)
-
         yield self.TransitionValidationResult(True, None)
-        self.items.update({item.warehouse: new_quantity})
+        self.item.quantity = max(0, self.item.quantity - item.quantity)
 
 
 class CommittedState(TrackingState):
@@ -299,33 +286,31 @@ class CommittedState(TrackingState):
             super(self.__class__, self).__init__()
             self.quantity = properties.get("quantity", 0)
             self.unverified_quantity = properties.get("unverified_quantity", 0)
-            self.warehouse = properties.get("warehouse", None)
             self.date = properties.get("date", datetime.datetime.now())
             self.order_id = properties.get("order_id", None)
 
             self.validations.extend([
                 (lambda i: i.quantity > 0),
                 (lambda i: i.unverified_quantity >= 0),
-                (lambda i: i.warehouse is not None),
                 (lambda i: i.date is not None),
                 (lambda i: i.order_id is not None),
             ])
 
         def __repr__(self):
-            return "{0} quantity={1} unverified_quantity={2} order_id={3} warehouse={4}".format(
-                self.__class__, self.quantity, self.unverified_quantity, self.order_id, self.warehouse)
+            return "{0} quantity={1} unverified_quantity={2} order_id={3}".format(
+                self.__class__, self.quantity, self.unverified_quantity, self.order_id)
 
     def __init__(self, name):
         super(self.__class__, self).__init__(name, self.CommittedItem)
         self.items = {}
-        # items is dict, keyed by (order_id, warehouse) tuple: { (order_id, warehouse): item }
+        # items is dict, keyed by order_id: { order_id: item }
 
     def _track(self, item):
         yield self.TransitionValidationResult(True, None)
-        if (item.order_id, item.warehouse) in self.items:
-            self.items.get((item.order_id, item.warehouse)).quantity += item.quantity
+        if item.order_id in self.items:
+            self.items.get(item.order_id).quantity += item.quantity
         else:
-            self.items[(item.order_id, item.warehouse)] = item
+            self.items[item.order_id] = item
 
     def get_by_order(self, order_id):
         matches = {}
@@ -341,60 +326,55 @@ class CommittedState(TrackingState):
                 return False
         return True
 
-    def get_unverified(self, warehouse):
+    def get_unverified(self):
         unverified_items = []
 
-        for key, item in self.items.iteritems():
-            if warehouse in key and item.unverified_quantity > 0:
+        for item in self.items.itervalues():
+            if item.unverified_quantity > 0:
                 unverified_items.append(item)
 
         return unverified_items
 
-    def quantity(self, warehouse=None):
+    def quantity(self, key=None):
         quantity = 0
 
         for item in self.items.itervalues():
-            if warehouse and item.warehouse != warehouse:
-                continue
-            else:
-                quantity += item.quantity
-                quantity += item.unverified_quantity
+            quantity += item.quantity
+            quantity += item.unverified_quantity
 
         return quantity
 
-    def _reduce_quantity_for(self, order_id, warehouse, quantity):
-        item = self.items.get((order_id, warehouse), None)
+    def _reduce_quantity_for(self, order_id, quantity):
+        item = self.items.get(order_id, None)
         if not item:
-            message = "Could not find commitment for {0} in {1}".format(order_id, warehouse)
+            message = "Could not find commitment for {0}".format(order_id)
             yield self.TransitionValidationResult(False, message)
 
         if quantity > item.quantity:
-            message = "Cannot commit {0} (maximum {1} for commitment for {2} in {2}".format(
-                order_id, warehouse, quantity, item.quantity)
+            message = "Cannot commit {0} (maximum {1} for commitment for {2}".format(quantity, item.quantity, order_id)
             yield self.TransitionValidationResult(False, message)
 
         yield self.TransitionValidationResult(True, None)
         if item.quantity == quantity:
-            del self.items[(order_id, warehouse)]
+            del self.items[order_id]
         else:
             item.quantity -= quantity
 
     def backorder_commitment(self, item):
-        return self._reduce_quantity_for(item.order_id, item.warehouse, item.quantity)
+        return self._reduce_quantity_for(item.order_id, item.quantity)
 
     def revert(self, item):
-        return self._reduce_quantity_for(item.order_id, item.warehouse, item.quantity)
+        return self._reduce_quantity_for(item.order_id, item.quantity)
 
     def fulfill(self, item):
-        return self._reduce_quantity_for(item.order_id, item.warehouse, item.quantity)
+        return self._reduce_quantity_for(item.order_id, item.quantity)
 
     def verify(self, item):
         verified_quantity = item.get("quantity", None)
         if verified_quantity is None:
             raise KeyError()
 
-        warehouse = item["warehouse"]
-        for item in [v for k, v in self.items.iteritems() if warehouse == k[1]]:
+        for item in self.items.itervalues():
             # TODO: Verify oldest orders first
 
             if item.quantity <= verified_quantity:
@@ -414,9 +394,9 @@ class CommittedState(TrackingState):
                 verified_quantity = 0
 
     def verify_out_of_stock(self, verify_item):
-        item = self.items.get((verify_item.order_id, verify_item.warehouse), None)
+        item = self.items.get(verify_item.order_id, None)
         if not item:
-            message = "Could not find commitment for {0} in {1}".format(verify_item.order_id, verify_item.warehouse)
+            message = "Could not find commitment for {0}".format(verify_item.order_id)
             yield self.TransitionValidationResult(False, message)
 
         yield self.TransitionValidationResult(True, None)
@@ -608,12 +588,10 @@ class LostAndFoundState(TrackingState):
         def __init__(self, properties):
             super(self.__class__, self).__init__()
             self.quantity = properties.get("quantity", 0)
-            self.warehouse = properties.get("warehouse", None)
             self.date = properties.get("date", None)
 
             self.validations.extend([
                 (lambda i: i.quantity >= 0),
-                (lambda i: i.warehouse is not None),
                 (lambda i: i.date is not None),
             ])
 
@@ -625,11 +603,8 @@ class LostAndFoundState(TrackingState):
         yield self.TransitionValidationResult(True, None)
         self.items.append(item)
 
-    def quantity(self, warehouse=None):
-        if warehouse:
-            return reduce(operator.add, [item.quantity for item in self.items if item.warehouse == warehouse], 0)
-        else:
-            return reduce(operator.add, [item.quantity for item in self.items], 0)
+    def quantity(self, key=None):
+        return reduce(operator.add, [item.quantity for item in self.items], 0)
 
     def found(self, item):
         yield self.TransitionValidationResult(True, None)

@@ -94,7 +94,7 @@ class InventoryItem(Entity):
     # Commited Items methods
 
     def find_committed_for_order(self, order_id):
-        return self.committed.get_by_order(order_id)
+        return self.committed.get(key=order_id)
 
     def quantity_committed(self):
         return self.committed.quantity()

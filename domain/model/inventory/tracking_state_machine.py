@@ -312,13 +312,8 @@ class CommittedState(TrackingState):
         else:
             self.items[item.order_id] = item
 
-    def get_by_order(self, order_id):
-        matches = {}
-        for key, item in self.items.iteritems():
-            if order_id in key:
-                matches[key] = item.export()
-
-        return matches
+    def _get(self, order_id):
+        return self.items.get(order_id, None)
 
     def is_verified(self, order_id):
         for key, item in self.items.iteritems():

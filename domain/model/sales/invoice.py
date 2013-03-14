@@ -5,12 +5,13 @@ from domain.model.sales.line_item import LineItem
 
 
 class Invoice(Entity):
-    def __init__(self, id, invoice_date, order_id=None, customer_reference=None, line_items=None):
-        self.id = id
+    def __init__(self, invoice_id, customer, invoice_date, order_id=None, customer_reference=None):
+        self.invoice_id = invoice_id
+        self.customer = customer
         self.invoice_date = invoice_date
         self.order_id = order_id if order_id else None
         self.customer_reference = customer_reference if customer_reference else None
-        self.line_items = line_items if line_items else []
+        self.line_items = []
         self.finalised = False
 
     def tax(self):

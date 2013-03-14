@@ -43,7 +43,7 @@ class Delivery(Entity):
 
         item.update({"deliver_quantity": quantity})
 
-    def get_orders(self):
+    def get_order_descriptors(self):
         orders = {}
 
         for item in self.items:
@@ -57,4 +57,7 @@ class Delivery(Entity):
             else:
                 orders.update({order_id: [order_descriptor]})
 
-        return orders.iteritems()
+        return orders
+
+    def add_invoice(self, invoice_id):
+        self.invoice_ids.append(invoice_id)

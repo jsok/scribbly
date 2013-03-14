@@ -40,3 +40,4 @@ The domain entity groups are:
 Domain services are:
 - Pricing service: Calculate product discounts based on product category and customer discount tier
 - Delivery service: Aggregate orders from a customer into a delivery
+- Invoicing service: Create invoices for deliveries, orders or ad-hoc

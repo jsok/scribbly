@@ -24,3 +24,6 @@ class Order(Entity):
 
     def add_line_item(self, sku, quantity, price, discount):
         self.line_items.append(LineItem(sku, quantity, price, discount))
+
+    def get_line_items_for_sku(self, sku):
+        return [line_item for line_item in self.line_items if line_item.sku == sku]

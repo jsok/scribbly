@@ -130,8 +130,8 @@ class InvoicingServiceTestCase(TestCase):
         service = InvoicingService(self.customer_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
 
-        # Order descriptor has a commitment for a product that doesn't exist
-        self.order_descriptors["ORD001"].append({"sku": "PROD00X", "quantity": 1})
+        # Order descriptor has a commitment for wrong quantity
+        self.order_descriptors["ORD001"].append({"sku": "PROD001", "quantity": 10})
 
         service._invoice_order_descriptors("Customer", self.order_descriptors)
 

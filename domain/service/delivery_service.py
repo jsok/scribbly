@@ -32,7 +32,7 @@ class DeliveryService(Service):
                     if inventory_item.committed.get_unverified(warehouse):
                         raise DeliveryError("Cannot create delivery from unverified order")
 
-                    delivery.add_item(line_item.sku, item.quantity, warehouse, item.order_id)
+                    delivery.add_item(line_item.sku, item["quantity"], warehouse, item["order_id"])
 
         return delivery
 

@@ -247,18 +247,18 @@ class InventoryCommitWithBufferTestCase(TestCase):
         item.commit(4, "WHSE001", "ORD001")
 
         self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
-        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,
+        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],
                           "Incorrect quantity was automatically verified")
-        self.assertEquals(1, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].unverified_quantity,
+        self.assertEquals(1, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Incorrect quantity was automatically verified")
 
         # Verify the original stock level was correct
         item.verify_stock_level(5, "WHSE001")
 
         self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
-        self.assertEquals(4, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,
+        self.assertEquals(4, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],
                           "Item quantities do not reflect verification count")
-        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].unverified_quantity,
+        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Item quantities do not reflect verification count")
 
     def test_commit_and_verify_with_backorder(self):
@@ -268,9 +268,9 @@ class InventoryCommitWithBufferTestCase(TestCase):
         item.commit(6, "WHSE001", "ORD001")
 
         self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
-        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,
+        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],
                           "Incorrect quantity was automatically verified")
-        self.assertEquals(2, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].unverified_quantity,
+        self.assertEquals(2, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Incorrect quantity was automatically verified")
         self.assertEquals(1, item.quantity_backordered("ORD001"), "Item was not backordered")
 
@@ -278,9 +278,9 @@ class InventoryCommitWithBufferTestCase(TestCase):
         item.verify_stock_level(5, "WHSE001")
 
         self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
-        self.assertEquals(5, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,
+        self.assertEquals(5, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],
                           "Item quantities do not reflect verification count")
-        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].unverified_quantity,
+        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Item quantities do not reflect verification count")
         self.assertEquals(1, item.quantity_backordered("ORD001"), "Backorder should not have been modified")
 
@@ -291,18 +291,18 @@ class InventoryCommitWithBufferTestCase(TestCase):
         item.commit(4, "WHSE001", "ORD001")
 
         self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
-        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,
+        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],
                           "Incorrect quantity was automatically verified")
-        self.assertEquals(1, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].unverified_quantity,
+        self.assertEquals(1, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Incorrect quantity was automatically verified")
 
         # We could only find 3, 2 went missing!
         item.verify_stock_level(3, "WHSE001")
 
         self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
-        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,
+        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],
                           "Item quantities do not reflect verification count")
-        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].unverified_quantity,
+        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Item quantities do not reflect verification count")
         self.assertEquals(1, item.quantity_backordered("ORD001"), "Backorder should have been created")
         self.assertEquals(2, item.quantity_lost(), "Incorrect number of lost items tracked")
@@ -314,18 +314,18 @@ class InventoryCommitWithBufferTestCase(TestCase):
         self.assertTrue(item.commit(4, "WHSE001", "ORD001"))
 
         self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
-        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,
+        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],
                           "Incorrect quantity was automatically verified")
-        self.assertEquals(1, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].unverified_quantity,
+        self.assertEquals(1, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Incorrect quantity was automatically verified")
 
         # All 5 went missing!
         item.verify_stock_level(0, "WHSE001")
 
         self.assertEquals(0, item.effective_quantity_on_hand("WHSE001"))
-        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,
+        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],
                           "Item quantities do not reflect verification count")
-        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].unverified_quantity,
+        self.assertEquals(0, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Item quantities do not reflect verification count")
         self.assertEquals(4, item.quantity_backordered("ORD001"), "Backorder should have been created")
         self.assertEquals(5, item.quantity_lost(), "Incorrect number of lost items tracked")
@@ -337,9 +337,9 @@ class InventoryCommitWithBufferTestCase(TestCase):
         item.commit(4, "WHSE001", "ORD001")
 
         self.assertEquals(1, item.effective_quantity_on_hand("WHSE001"))
-        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].quantity,
+        self.assertEquals(3, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["quantity"],
                           "Incorrect quantity was automatically verified")
-        self.assertEquals(1, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")].unverified_quantity,
+        self.assertEquals(1, item.find_committed_for_order("ORD001")[("ORD001", "WHSE001")]["unverified_quantity"],
                           "Incorrect quantity was automatically verified")
 
         # We found an extra to make 6

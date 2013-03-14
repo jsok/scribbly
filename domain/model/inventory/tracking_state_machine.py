@@ -331,7 +331,7 @@ class CommittedState(TrackingState):
         matches = {}
         for key, item in self.items.iteritems():
             if order_id in key:
-                matches[key] = item
+                matches[key] = item.export()
 
         return matches
 

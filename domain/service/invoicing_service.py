@@ -76,7 +76,7 @@ class InvoicingService(Service):
                 if not commitment:
                     raise InvoicingError("Inventory commitment does not exist")
 
-                if quantity > commitment.quantity:
+                if quantity > commitment["quantity"]:
                     raise InvoicingError("Order descriptor has requested quantity greater than order commitment")
 
                 for line_item in order.get_line_items_for_sku(sku):

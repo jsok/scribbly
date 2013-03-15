@@ -36,29 +36,25 @@ class OrderingServiceTestCase(TestCase):
         prod1.set_price(PriceValueFactory.build(price=100.00))
         prod2 = ProductFactory.build(sku="PROD002", price_category="MANF-B")
         prod2.set_price(PriceValueFactory.build(price=20.00))
-        products = {
+        self.products = {
             "PROD001": prod1,
             "PROD002": prod2,
         }
         self.product_repository = Mock()
-        self.product_repository.find = Mock(side_effect=lambda sku: products.get(sku))
+        self.product_repository.find = Mock(side_effect=lambda sku: self.products.get(sku))
 
         inv_prod1 = InventoryItemFactory.build(sku="PROD001")
         inv_prod1.enter_stock_on_hand(10)
-        # inv_prod1.commit(1, "ORD001")
-        # inv_prod1.commit(2, "ORD002")
 
-        inv_prod2 = InventoryItemFactory.build(sku="PROD002")
+        inv_prod2 = InventoryItemFactory.build(sku="PROD002", on_hand_buffer=7)
         inv_prod2.enter_stock_on_hand(10)
-        # inv_prod2.commit(3, "ORD001")
-        # inv_prod2.commit(4, "ORD002")
 
-        inventory = {
+        self.inventory = {
             "PROD001": inv_prod1,
             "PROD002": inv_prod2,
         }
         self.inventory_repository = Mock()
-        self.inventory_repository.find = Mock(side_effect=lambda sku: inventory.get(sku))
+        self.inventory_repository.find = Mock(side_effect=lambda sku: self.inventory.get(sku))
 
         self.order_descriptors = {
             "ORD001": [
@@ -72,10 +68,13 @@ class OrderingServiceTestCase(TestCase):
 
         }
 
+        self.order_repository = Mock()
+        self.order_repository.next_id = Mock(side_effect=lambda: ["ORD002", "ORD001"].pop())
+
     def test_order_bad_customer(self):
         service = OrderingService(self.customer_repository,
                                   self.product_repository,
-                                  None,
+                                  self.order_repository,
                                   self.inventory_repository,
                                   self.pricing_service)
 
@@ -85,7 +84,7 @@ class OrderingServiceTestCase(TestCase):
     def test_order_bad_product(self):
         service = OrderingService(self.customer_repository,
                                   self.product_repository,
-                                  None,
+                                  self.order_repository,
                                   self.inventory_repository,
                                   self.pricing_service)
 
@@ -100,15 +99,15 @@ class OrderingServiceTestCase(TestCase):
     def test_order_creation(self):
         service = OrderingService(self.customer_repository,
                                   self.product_repository,
-                                  None,
+                                  self.order_repository,
                                   self.inventory_repository,
                                   self.pricing_service)
 
-        order = service.create_order("Customer", self.order_descriptors["ORD001"],
-                                     customer_reference="Customer-PO-Ref")
+        order = service.create_order("Customer", self.order_descriptors["ORD001"], customer_reference="Customer-PO-Ref")
 
         self.assertEquals("Customer-PO-Ref", order.customer_reference, "Customer reference not set correctly")
-        self.assertFalse(order.is_acknowledged(), "Order should not have been acknowledged")
+        self.assertTrue(order.is_acknowledged(), "Order should not have been acknowledged")
+        self.assertEquals("ORD001", order.order_id, "Order ID was not set correctly")
 
         for line_item in order.line_items:
             if line_item.sku == "PROD001":
@@ -122,3 +121,41 @@ class OrderingServiceTestCase(TestCase):
             else:
                 self.assert_("Unknown item found in order")
 
+    def test_order_fails_no_inventory_item(self):
+        service = OrderingService(self.customer_repository,
+                                  self.product_repository,
+                                  self.order_repository,
+                                  self.inventory_repository,
+                                  self.pricing_service)
+
+        # Remove PROD002 from inventory
+        self.inventory.pop("PROD002")
+
+        with self.assertRaises(OrderingError):
+            order = service.create_order("Customer", self.order_descriptors["ORD001"])
+
+    def test_order_cannot_auto_acknowledge(self):
+        service = OrderingService(self.customer_repository,
+                                  self.product_repository,
+                                  self.order_repository,
+                                  self.inventory_repository,
+                                  self.pricing_service)
+
+        # PROD002 has a high on hand buffer, ORD002 should trigger a verification requirement and thus
+        # not auto-acknowledge
+        order = service.create_order("Customer", self.order_descriptors["ORD002"])
+
+        self.assertFalse(order.is_acknowledged(), "Order should not have been acknowledged")
+
+        # Rest of the order should be fine however
+        for line_item in order.line_items:
+            if line_item.sku == "PROD001":
+                self.assertEquals(2, line_item.quantity, "Incorrect Quantity for PROD001")
+                self.assertEquals(100.00, line_item.price, "Incorrect price for PROD001")
+                self.assertEquals(0.3, line_item.discount, "Incorrect discount for PROD001")
+            if line_item.sku == "PROD002":
+                self.assertEquals(4, line_item.quantity, "Incorrect Quantity for PROD002")
+                self.assertEquals(20.00, line_item.price, "Incorrect price for PROD002")
+                self.assertEquals(0.1, line_item.discount, "Incorrect discount for PROD002")
+            else:
+                self.assert_("Unknown item found in order")

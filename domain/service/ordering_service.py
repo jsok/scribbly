@@ -15,17 +15,19 @@ class OrderingService(Service):
 
     def create_order(self, customer, order_descriptors, customer_reference=None):
         """
-        Creates an unacknowledged order for the given customer.
+        Creates an order for the given customer.
+        1) Commits all items to inventory
+        2) Auto-acknowledges order if not inventory verification required
         order_descriptor is a list of tuples: [ (sku, quantity) ]
         """
         customer_entity = self.customer_repository.find(customer)
         if not customer_entity:
             raise OrderingError("Cannot find specified customer for order")
 
-        order = Order(None, customer, datetime.now(), customer_reference=customer_reference)
+        order = Order(self.order_repository.next_id(), customer, datetime.now(), customer_reference=customer_reference)
         self._add_order_line_items(order, customer_entity, order_descriptors)
+        self._auto_acknowledge_order(order)
 
-        # XXX: Order ID not yet allocated
         customer_entity.submit_order(order.order_id)
 
         return order
@@ -40,41 +42,43 @@ class OrderingService(Service):
 
             order.add_line_item(sku, quantity, product.get_price(), discount)
 
-    def acknowledge_order(self, order, location_descriptor):
+    def _auto_acknowledge_order(self, order):
         """
         Acknowledge an order and commit its line items to the inventory.
-        location_descriptors is a dict: {sku: [(warehouse, quantity)]}
+        Acknowledgement fails if any inventory item needs verification.
         """
 
-        # Ensure there exists location descriptors for all line items
-        order_skus = set([line_item.sku for line_item in order.line_items])
-        location_skus = set(location_descriptor.iterkeys())
-
-        if not order_skus.issubset(location_skus):
-            missing_skus = order_skus.difference(location_skus).intersection(order_skus)
-            message = "Cannot acknowledge order. Missing SKU locations for: {0}".format(missing_skus)
-            raise OrderingError(message)
-
         inventory_commits = []
+        inventory_verifications = []
+
         for line_item in order.line_items:
             inventory_item = self.inventory_repository.find(line_item.sku)
             if not inventory_item:
                 message = "Cannot find Inventory Item for SKU={0}".format(line_item.sku)
                 raise OrderingError(message)
 
-            locations = location_descriptor.get(line_item.sku)
+            # Do not perform commit, store lambda for later execution
+            do_commit = lambda commit: inventory_item.commit(line_item.quantity, order.order_id, dry_run=not commit)
+            inventory_commits.append(do_commit)
 
-            for warehouse, quantity in locations:
-                # Do not perform commit, store lambda for later execution
-                do_commit = lambda: inventory_item.commit(quantity, order.order_id)
-                inventory_commits.append(do_commit)
+            needs_verify = lambda: inventory_item.needs_stock_verified(order.order_id)
+            inventory_verifications.append(needs_verify)
+
+        import operator
+        dry_run = map(lambda do_commit: do_commit(False), inventory_commits)
+        commits_will_succeed = reduce(operator.and_, dry_run, True)
 
         # Inventory checks for all line items succeeded, proceed with commit
-        for commit in inventory_commits:
-            commit()
+        if commits_will_succeed:
+            map(lambda do_commit: do_commit(True), inventory_commits)
+        else:
+            raise OrderingError("Cannot commit all items in order to inventory")
 
-        order.acknowledge(datetime.now())
-        return True
+        can_acknowledge = reduce(operator.and_,
+                                 map(lambda verify: not verify(), inventory_verifications),
+                                 True)
+        if can_acknowledge:
+            order.acknowledge(datetime.now())
 
 
 class OrderingError(Exception):

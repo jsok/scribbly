@@ -107,6 +107,9 @@ class OrderingServiceTestCase(TestCase):
         order = service.create_order("Customer", self.order_descriptors["ORD001"],
                                      customer_reference="Customer-PO-Ref")
 
+        self.assertEquals("Customer-PO-Ref", order.customer_reference, "Customer reference not set correctly")
+        self.assertFalse(order.is_acknowledged(), "Order should not have been acknowledged")
+
         for line_item in order.line_items:
             if line_item.sku == "PROD001":
                 self.assertEquals(1, line_item.quantity, "Incorrect Quantity for PROD001")

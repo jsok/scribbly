@@ -1,4 +1,4 @@
-from mock import Mock
+from mock import Mock, call
 from unittest import TestCase, skip
 
 from domain.model.pricing.discount import Discount
@@ -81,6 +81,9 @@ class OrderingServiceTestCase(TestCase):
         with self.assertRaises(OrderingError):
             service.create_order("Fake Customer", None)
 
+        self.assertTrue(call("Fake Customer") in self.customer_repository.find.call_args_list,
+                        "Fake Customer was not queried for")
+
     def test_order_bad_product(self):
         service = OrderingService(self.customer_repository,
                                   self.product_repository,
@@ -95,6 +98,9 @@ class OrderingServiceTestCase(TestCase):
 
         with self.assertRaises(OrderingError):
             service.create_order("Customer", order_descriptors)
+
+        self.assertTrue(call("PROD-FAKE") in self.product_repository.find.call_args_list,
+                        "Fake product was not queried for")
 
     def test_order_creation(self):
         service = OrderingService(self.customer_repository,
@@ -111,10 +117,14 @@ class OrderingServiceTestCase(TestCase):
 
         for line_item in order.line_items:
             if line_item.sku == "PROD001":
+                self.assertTrue(call("PROD001") in self.product_repository.find.call_args_list,
+                                "Product PROD001 was not queried for")
                 self.assertEquals(1, line_item.quantity, "Incorrect Quantity for PROD001")
                 self.assertEquals(100.00, line_item.price, "Incorrect price for PROD001")
                 self.assertEquals(0.3, line_item.discount, "Incorrect discount for PROD001")
             if line_item.sku == "PROD002":
+                self.assertTrue(call("PROD002") in self.product_repository.find.call_args_list,
+                                "Product PROD002 was not queried for")
                 self.assertEquals(3, line_item.quantity, "Incorrect Quantity for PROD002")
                 self.assertEquals(20.00, line_item.price, "Incorrect price for PROD002")
                 self.assertEquals(0.1, line_item.discount, "Incorrect discount for PROD002")
@@ -133,6 +143,11 @@ class OrderingServiceTestCase(TestCase):
 
         with self.assertRaises(OrderingError):
             order = service.create_order("Customer", self.order_descriptors["ORD001"])
+
+        self.assertTrue(call("PROD002") in self.product_repository.find.call_args_list,
+                        "Product PROD002 was not queried for")
+        self.assertTrue(call("PROD002") in self.inventory_repository.find.call_args_list,
+                        "Product PROD002 was not queried for")
 
     def test_order_cannot_auto_acknowledge(self):
         service = OrderingService(self.customer_repository,

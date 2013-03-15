@@ -1,10 +1,15 @@
 from datetime import datetime
+import operator
 
 from domain.shared.service import Service
 from domain.model.sales.order import Order
 
 
 class OrderingService(Service):
+    """
+    A domain service which creates and manages orders.
+    """
+
     def __init__(self, customer_repository, product_repository, order_repository, inventory_repository,
                  pricing_service):
         self.customer_repository = customer_repository
@@ -57,14 +62,13 @@ class OrderingService(Service):
                 message = "Cannot find Inventory Item for SKU={0}".format(line_item.sku)
                 raise OrderingError(message)
 
-            # Do not perform commit, store lambda for later execution
+            # Delay commit and verification of inventory item
             do_commit = lambda commit: inventory_item.commit(line_item.quantity, order.order_id, dry_run=not commit)
             inventory_commits.append(do_commit)
 
             needs_verify = lambda: inventory_item.needs_stock_verified(order.order_id)
             inventory_verifications.append(needs_verify)
 
-        import operator
         dry_run = map(lambda do_commit: do_commit(False), inventory_commits)
         commits_will_succeed = reduce(operator.and_, dry_run, True)
 

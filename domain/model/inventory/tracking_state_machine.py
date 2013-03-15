@@ -198,7 +198,7 @@ class TrackingState(object):
         item = self.item_type(item_dict)
         return item if item.validate() else None
 
-    def track(self, item):
+    def track(self, item, dry_run=None):
         """
         Track an item in this state.
         An item cannot be 'untracked', items only move between states via transitions.
@@ -211,9 +211,12 @@ class TrackingState(object):
         if not item:
             raise TransitionValidationError("Could not validate item {0} to track it.".format(item))
 
+        dry_run = True if dry_run is not None else False
         for validation in self._track(item):
             if not validation.succeeded():
                 raise TransitionValidationError(validation.message)
+            elif dry_run:
+                return True
 
         return True
 

@@ -233,7 +233,11 @@ class TrackingState(object):
         raise NotImplementedError()  # pragma: no cover
 
     def get(self, key):
-        return self._get(key).export()
+        obj = self._get(key)
+        if obj:
+            return obj.export()
+        else:
+            return None
 
     def _get(self, key):
         """

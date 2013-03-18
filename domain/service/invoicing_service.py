@@ -9,8 +9,10 @@ class InvoicingService(Service):
     A domain service which creates invoices from orders, but also indirectly via delivieries.
     """
 
-    def __init__(self, customer_repository, order_repository, inventory_repository, tax_rate_repository):
+    def __init__(self, customer_repository, invoice_repository, order_repository, inventory_repository,
+                 tax_rate_repository):
         self.customer_repository = customer_repository
+        self.invoice_repository = invoice_repository
         self.order_repository = order_repository
         self.inventory_repository = inventory_repository
         self.tax_rate_repository = tax_rate_repository
@@ -59,7 +61,8 @@ class InvoicingService(Service):
             if not order.is_acknowledged():
                 raise OrderUnacknowledgedError
 
-            invoice = Invoice(None, customer_id, datetime.now(), order_id=order_id,
+            invoice_id = self.invoice_repository.next_id()
+            invoice = Invoice(invoice_id, order.customer, datetime.now(), order_id=order_id,
                               customer_reference=order.customer_reference)
 
             for descriptor in descriptors:
@@ -89,13 +92,14 @@ class InvoicingService(Service):
     def _finalise_invoice(self, invoice, descriptors):
         # We are confident that the descriptor is valid at this point
         #for descriptor in descriptors:
-        for descriptor in []:
+        for descriptor in descriptors:
             inventory_item = self.inventory_repository.find(descriptor.get("sku"))
             success = inventory_item.fulfill_commitment(descriptor.get("quantity"),
                                                         invoice.order_id,
                                                         invoice.invoice_id)
             if not success:
-                message = "Quantity={0}, Order ID={2}, Invoice ID={3}".format(
+                message = "SKU={0} Quantity={1}, Order ID={2}, Invoice ID={3}".format(
+                    inventory_item.sku,
                     descriptor.get("quantity"),
                     invoice.order_id,
                     invoice.invoice_id)

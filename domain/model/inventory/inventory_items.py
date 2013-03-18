@@ -99,7 +99,7 @@ class InventoryItem(Entity):
     def quantity_committed(self):
         return self.committed.quantity()
 
-    def commit(self, quantity, order_id):
+    def commit(self, quantity, order_id, dry_run=None):
         result = True
         effective_quantity = self.effective_quantity_on_hand()
 
@@ -107,7 +107,10 @@ class InventoryItem(Entity):
         if backordered_quantity > 0:
             try:
                 # Create a backorder for quantity we know is impossible to commit
-                self.backorders.track({"quantity": backordered_quantity, "date": datetime.now(), "order_id": order_id})
+                self.backorders.track({"quantity": backordered_quantity,
+                                       "date": datetime.now(),
+                                       "order_id": order_id},
+                                      dry_run=dry_run)
             except TransitionValidationError:
                 result = False
 
@@ -124,7 +127,8 @@ class InventoryItem(Entity):
             self.transition("commit",
                             {"quantity": verified_quantity + unverified_quantity},
                             {"quantity": verified_quantity, "unverified_quantity": unverified_quantity,
-                             "order_id": order_id, "date": datetime.now()})
+                             "order_id": order_id, "date": datetime.now()},
+                            dry_run=dry_run)
         except TransitionValidationError:
             result = False
 
@@ -245,8 +249,8 @@ class InventoryItem(Entity):
             "quantity": quantity,
             "purchase_order_id": purchase_order_id,
             "date": datetime.now(),
-            "eta_date": eta_date if eta_date else None,
-         })
+            "eta_date": eta_date if eta_date else None
+        })
 
     def deliver_purchase_order(self, quantity, purchase_order_id):
         try:

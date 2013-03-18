@@ -27,3 +27,10 @@ class Order(Entity):
 
     def get_line_items_for_sku(self, sku):
         return [line_item for line_item in self.line_items if line_item.sku == sku]
+
+    def get_order_descriptor(self):
+        item_descriptors = []
+        for item in self.line_items:
+            item_descriptors.append({"sku": item.sku, "quantity": item.quantity})
+
+        return item_descriptors

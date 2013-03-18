@@ -55,10 +55,12 @@ class TrackingStateMachine(object):
         dry_run = True if dry_run else False
         if not dry_run:
             # Run to completion
-            for validation in transition:
-                pass
-            for validation in track:
-                pass
+            for validation in transition:  # pragma: no cover
+                if validation:
+                    raise TransitionFatalError("Transition from-state encountered fatal error")
+            for validation in track:  # pragma: no cover
+                if validation:
+                    raise TransitionFatalError("Transition to-state encountered fatal error")
 
         return True
 
@@ -117,6 +119,12 @@ class TransitionValidationError(Exception):
     An exception to indicate that the transition failed validation and will not be committed.
     """
     pass
+
+
+class TransitionFatalError(Exception):
+    """
+    An unrecoverable error occured during a transition, most likely leaving the transition in a half-committed state.
+    """
 
 
 class TransitionActionError(Exception):
@@ -190,7 +198,7 @@ class TrackingState(object):
         item = self.item_type(item_dict)
         return item if item.validate() else None
 
-    def track(self, item):
+    def track(self, item, dry_run=None):
         """
         Track an item in this state.
         An item cannot be 'untracked', items only move between states via transitions.
@@ -203,9 +211,12 @@ class TrackingState(object):
         if not item:
             raise TransitionValidationError("Could not validate item {0} to track it.".format(item))
 
+        dry_run = True if dry_run is not None else False
         for validation in self._track(item):
             if not validation.succeeded():
                 raise TransitionValidationError(validation.message)
+            elif dry_run:
+                return True
 
         return True
 
@@ -424,6 +435,12 @@ class BackorderState(TrackingState):
         self.items = {}
 
     def _track(self, item):
+        # Only allow tracking allocations if they already exist
+        if item.allocated > 0 and item.order_id not in self.items:
+            message = "Cannot allocate quantity {0} since backorder for order {1} does not exist".format(
+                item.allocated, item.order_id)
+            yield self.TransitionValidationResult(False, message)
+
         yield self.TransitionValidationResult(True, None)
         if item.order_id in self.items:
             existing = self.items.get(item.order_id)
@@ -441,7 +458,7 @@ class BackorderState(TrackingState):
             return reduce(operator.add, [item.quantity for item in self.items.values()], 0)
 
     def fulfill_backorder(self, item):
-        backorder = self.items.get(item.order_id)
+        backorder = self.items.get(item.order_id, None)
         if not backorder:
             message = "Could not find backorder for order {0}.".format(item.order_id)
             yield self.TransitionValidationResult(False, message)

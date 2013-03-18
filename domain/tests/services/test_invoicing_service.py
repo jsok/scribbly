@@ -2,7 +2,8 @@ from mock import Mock, call
 from nose.tools import raises
 from unittest import TestCase, skip
 
-from domain.service.invoicing_service import InvoicingService, InvoicingError
+from domain.service.invoicing_service import InvoicingService
+from domain.service.invoicing_service import InvoicingError, OrderUnacknowledgedError, OrderDescriptorError
 from domain.tests.factories.customer import CustomerFactory
 from domain.tests.factories.delivery import DeliveryFactory
 from domain.tests.factories.inventory import InventoryItemFactory
@@ -35,17 +36,24 @@ class InvoicingServiceTestCase(TestCase):
         order2.add_line_item("PROD002", 4, 10.00, 0.00)
         order2.is_acknowledged = Mock(return_value=True)
 
+        order3 = OrderFactory.build(order_id="ORD003", customer_reference="CUST-PO003")
+        order3.customer = "Customer"
+        order3.add_line_item("PROD004", 1, 100.00, 0.10)
+        order3.is_acknowledged = Mock(return_value=True)
+
         orderx = OrderFactory.build(order_id="ORD00X", customer_reference="CUST-PO00X")
+        orderx.customer = "Fake Customer"
         orderx.is_acknowledged = Mock(return_value=False)
 
-        orders = {
+        self.orders = {
             "ORD001": order1,
             "ORD002": order2,
-            "ORD00X": orderx,  # An unacknowledged order
+            "ORD003": order3,
+            "ORD00X": orderx,  # An unacknowledged order with bad customer
         }
 
         self.order_repository = Mock()
-        self.order_repository.find = Mock(side_effect=lambda order_id: orders.get(order_id))
+        self.order_repository.find = Mock(side_effect=lambda order_id: self.orders.get(order_id))
 
         prod1 = InventoryItemFactory.build(sku="PROD001")
         prod1.enter_stock_on_hand(10)
@@ -57,9 +65,21 @@ class InvoicingServiceTestCase(TestCase):
         prod2.commit(3, "ORD001")
         prod2.commit(4, "ORD002")
 
+        # Product with no commitments
+        prod3 = InventoryItemFactory.build(sku="PROD003")
+        prod3.enter_stock_on_hand(10)
+
+        # Always failing commitment fulfillment
+        prod4 = InventoryItemFactory.build(sku="PROD004")
+        prod4.enter_stock_on_hand(10)
+        prod4.commit(3, "ORD003")
+        prod4.fulfill_commitment = Mock(side_effect=lambda x, y, z: False)
+
         inventory = {
             "PROD001": prod1,
             "PROD002": prod2,
+            "PROD003": prod3,
+            "PROD004": prod4,
         }
 
         self.inventory_repository = Mock()
@@ -79,44 +99,45 @@ class InvoicingServiceTestCase(TestCase):
                 {"sku": "PROD002", "quantity": 2},
                 {"sku": "PROD002", "quantity": 2}
             ],
+            "ORD003": [
+                {"sku": "PROD004", "quantity": 3},
+            ],
+            "ORD00X": [
+                {"sku": "PROD001", "quantity": 1},
+            ]
         }
 
-    from domain.service.invoicing_service import OrderDescriptorError
     @raises(OrderDescriptorError)
     def test_invalid_order_descriptor(self):
-        service = InvoicingService(None, None, None, None, None)
-        service._invoice_order_descriptors("Customer", {
-            "ORD001": [{"bad": None, "keys": None}]
-        })
+        service = InvoicingService(self.customer_repository, self.invoice_repository, self.order_repository,
+                                   self.inventory_repository, self.tax_repository)
+        service._invoice_order("ORD001", [{"bad": None, "keys": None}])
 
-    @raises(ValueError)
+    @raises(InvoicingError)
     def test_invoice_nonexistent_customer(self):
         customer_repository = Mock()
         customer_repository.find = Mock(return_value=None)
 
-        service = InvoicingService(customer_repository, None, None, None, None)
-        service._invoice_order_descriptors("Fake Customer", {})
+        self.orders["ORD00X"].is_acknowledged = Mock(return_value=True)
+
+        service = InvoicingService(customer_repository, None, self.order_repository, None, None)
+        service._invoice_order("ORD00X")
 
         self.assertTrue(call("Fake Customer") in self.customer_repository.find.call_args_list,
                         "Fake Customer was not queried for")
 
     @raises(InvoicingError)
-    def test_invoice_orders_from_multiple_customers(self):
-        service = InvoicingService(self.customer_repository, None, None, None, None)
+    def test_invoice_order_no_such_order_id(self):
+        service = InvoicingService(self.customer_repository, None, self.order_repository, None, None)
 
-        self.order_descriptors["ORD999"] = []  # Does not belong to Customer
+        service._invoice_order("ORDER-NONEXISTENT")
 
-        service._invoice_order_descriptors("Customer", self.order_descriptors)
-
-    from domain.service.invoicing_service import OrderUnacknowledgedError
     @raises(OrderUnacknowledgedError)
     def test_invoice_unacknowledged_orders(self):
         service = InvoicingService(self.customer_repository, self.invoice_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
 
-        self.order_descriptors["ORD00X"] = []  # Has not been acknowledged
-
-        service._invoice_order_descriptors("Customer", self.order_descriptors)
+        service._invoice_order("ORD00X")
 
     @raises(InvoicingError)
     def test_invoice_descriptor_nonexistent_sku(self):
@@ -124,7 +145,7 @@ class InvoicingServiceTestCase(TestCase):
                                    self.inventory_repository, self.tax_repository)
 
         self.order_descriptors["ORD001"][0]["sku"] = "PRODFAKE"
-        service._invoice_order_descriptors("Customer", self.order_descriptors)
+        service._invoice_order("ORD001", descriptors=self.order_descriptors["ORD001"])
 
         self.assertTrue(call("PRODFAKE") in self.inventory_repository.find.call_args_list, "SKU was not queried for")
 
@@ -133,40 +154,20 @@ class InvoicingServiceTestCase(TestCase):
         service = InvoicingService(self.customer_repository, self.invoice_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
 
-        # Order descriptor has a commitment for wrong quantity
-        self.order_descriptors["ORD001"].append({"sku": "PROD001", "quantity": 10})
+        # Order descriptor has a product with no corresponding commitment
+        self.order_descriptors["ORD001"].append({"sku": "PROD003", "quantity": 10})
 
-        service._invoice_order_descriptors("Customer", self.order_descriptors)
+        service._invoice_order("ORD001", self.order_descriptors["ORD001"])
 
     @raises(InvoicingError)
-    def test_invoice_descriptor_inventory_mismatch(self):
+    def test_invoice_descriptor_commitment_quantity_mismatch(self):
         service = InvoicingService(self.customer_repository, self.invoice_repository, self.order_repository,
                                    self.inventory_repository, self.tax_repository)
 
-        # Order descriptor has a quantity greater than the order's commitment in the inventory
-        self.order_descriptors["ORD001"][0]["quantity"] = 10
+        # Order descriptor has a commitment for wrong quantity
+        self.order_descriptors["ORD001"] = [{"sku": "PROD001", "quantity": 10}]
 
-        service._invoice_order_descriptors("Customer", self.order_descriptors)
-
-    def test_invoice_orders(self):
-        service = InvoicingService(self.customer_repository, self.invoice_repository, self.order_repository,
-                                   self.inventory_repository, self.tax_repository)
-
-        invoices = service._invoice_order_descriptors("Customer", self.order_descriptors)
-
-        self.assertEquals(2, len(invoices), "Exactly 2 invoices should have been created")
-
-        inv_ord001 = [inv for inv in invoices if inv.order_id == "ORD001"][0]
-        self.assertEquals("CUST-PO001", inv_ord001.customer_reference, "Incorrect customer reference")
-        self.assertEquals(2, len(inv_ord001.line_items), "Invoice should only contain 2 line items")
-        self.assertEquals(132.00, inv_ord001.total_amount(), "Invoice total is incorrect")
-        self.assertFalse(inv_ord001.finalised, "Invoice should not yet be finalised")
-
-        inv_ord002 = [inv for inv in invoices if inv.order_id == "ORD002"][0]
-        self.assertEquals("CUST-PO002", inv_ord002.customer_reference, "Incorrect customer reference")
-        self.assertEquals(3, len(inv_ord002.line_items), "Invoice should only contain 3 line items")
-        self.assertEquals(242.00, inv_ord002.total_amount(), "Invoice total is incorrect")
-        self.assertFalse(inv_ord002.finalised, "Invoice should not yet be finalised")
+        service._invoice_order("ORD001", self.order_descriptors["ORD001"])
 
     def test_invoice_delivery(self):
         delivery = DeliveryFactory.build()
@@ -199,3 +200,22 @@ class InvoicingServiceTestCase(TestCase):
         self.assertEquals(2, len(inv_ord002.line_items), "Invoice should only contain 2 line items")
         self.assertEquals(242.00, inv_ord002.total_amount(), "Invoice total is incorrect")
         self.assertFalse(inv_ord002.finalised, "Invoice should not yet be finalised")
+
+    def test_invoice_order(self):
+        service = InvoicingService(self.customer_repository, self.invoice_repository, self.order_repository,
+                                   self.inventory_repository, self.tax_repository)
+
+        invoice = service.invoice_order("ORD001")
+
+        self.assertEquals("INV001", invoice.invoice_id, "Wrong Invoice ID assigned")
+        self.assertEquals("CUST-PO001", invoice.customer_reference, "Incorrect customer reference")
+        self.assertEquals(2, len(invoice.line_items), "Invoice should only contain 2 line items")
+        self.assertEquals(132.00, invoice.total_amount(), "Invoice total is incorrect")
+        self.assertFalse(invoice.finalised, "Invoice should not yet be finalised")
+
+    @raises(InvoicingError)
+    def test_invoice_order_fulfill_commitment_fails(self):
+        service = InvoicingService(self.customer_repository, self.invoice_repository, self.order_repository,
+                                   self.inventory_repository, self.tax_repository)
+
+        invoice = service.invoice_order("ORD003")

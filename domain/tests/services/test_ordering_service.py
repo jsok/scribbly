@@ -69,7 +69,8 @@ class OrderingServiceTestCase(TestCase):
         }
 
         self.order_repository = Mock()
-        self.order_repository.next_id = Mock(side_effect=lambda: ["ORD002", "ORD001"].pop())
+        order_ids = ["ORD002", "ORD001"]
+        self.order_repository.next_id = Mock(side_effect=lambda: order_ids.pop())
 
     def test_order_bad_customer(self):
         service = OrderingService(self.customer_repository,

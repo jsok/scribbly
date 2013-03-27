@@ -3,8 +3,8 @@ from domain.model.customer.customer import Customer
 
 
 class CustomerRepository(Repository):
-    def __init__(self):
-        super(CustomerRepository, self).__init__()
+    def __init__(self, session):
+        super(CustomerRepository, self).__init__(session)
 
     def find(self, customer_name):
         query = self.session.query(Customer).filter(Customer.name == customer_name)
@@ -13,3 +13,4 @@ class CustomerRepository(Repository):
 
     def store(self, customer_entity):
         self.session.add(customer_entity)
+        self.session.commit()

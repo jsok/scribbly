@@ -1,24 +1,15 @@
-from sqlalchemy import create_engine
 from unittest import TestCase
 
 from domain.tests.factories.customer import CustomerFactory
 
-from infrastructure.persistence import Session, metadata
+from infrastructure.tests.persistence import PersistenceTestCase
 from infrastructure.persistence.customer_repository import CustomerRepository
 
 
-class CustomerRepositoryTestCase(TestCase):
-
+class CustomerRepositoryTestCase(PersistenceTestCase):
     def setUp(self):
-        engine = create_engine('sqlite:///:memory:', echo=True)
-        Session.configure(bind=engine)
-
-        metadata.create_all(engine)
-
-        self.repository = CustomerRepository()
-
-    def tearDown(self):
-        self.repository.session.rollback()
+        super(CustomerRepositoryTestCase, self).setUp()
+        self.repository = CustomerRepository(self.session)
 
     def test_add_customer(self):
         customer = CustomerFactory.build(name="Customer")

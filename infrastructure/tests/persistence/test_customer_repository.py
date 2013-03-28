@@ -26,18 +26,18 @@ class CustomerRepositoryTestCase(PersistenceTestCase):
         customer = CustomerFactory.build(name="Customer")
         self.repository.store(customer)
 
-        biling_address = AddressFactory.build(type="BILLING")
-        customer.add_address(biling_address)
+        billing_address = AddressFactory.build(type="BILLING")
+        customer.add_address(billing_address)
 
-        # Create a shipping address, persist it in a new session
-        shipping_address = AddressFactory.build(type="Shipping")
+        shipping_address = AddressFactory.build(type="SHIPPING")
         customer.add_address(shipping_address)
 
         c = self.repository.find("Customer")
         a = c.get_addresses("BILLING")
         self.assertIsNotNone(c)
         self.assertEquals(1, len(a), "Customer should only have 1 billing address")
-        self.assertTrue(biling_address == a[0], "Billing addresses don't match")
+        self.assertEqual(billing_address, a[0], "Billing addresses don't match")
 
         a = c.get_addresses("SHIPPING")
         self.assertEquals(1, len(a), "Customer should only have 1 shipping addresses")
+        self.assertEqual(shipping_address, a[0], "Shipping addresses don't match")

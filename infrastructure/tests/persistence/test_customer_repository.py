@@ -1,6 +1,6 @@
 from domain.tests.factories.customer import CustomerFactory, AddressFactory
 
-from infrastructure.tests.persistence import PersistenceTestCase
+from infrastructure.tests.persistence import PersistenceTestCase, minimum_revision_satisfied
 from infrastructure.persistence.customer_repository import CustomerRepository
 
 
@@ -22,6 +22,7 @@ class CustomerRepositoryTestCase(PersistenceTestCase):
         c = self.repository.find("Customer")
         self.assertIsNone(c)
 
+    @minimum_revision_satisfied("5aa2dfb6e6a8")
     def test_add_address(self):
         customer = CustomerFactory.build(name="Customer")
         self.repository.store(customer)

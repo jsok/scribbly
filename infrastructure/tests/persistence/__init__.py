@@ -1,4 +1,6 @@
-from unittest import TestCase, skipUnless
+import os
+
+from unittest import TestCase
 from sqlalchemy import create_engine
 
 from infrastructure.persistence import metadata
@@ -25,7 +27,10 @@ class PersistenceTestCase(TestCase):
         cls.Session = sessionmaker()
 
     def setUp(self):
-        engine = engine_for_testing(in_memory=False, echo=True)
+        in_memory = True if os.getenv('SQLITE_IN_MEMORY', False) == '1' else False
+        echo = True if os.getenv('SQLITE_ECHO', False) == '1' else False
+
+        engine = engine_for_testing(in_memory=in_memory, echo=echo)
 
         # connect to the database
         self.connection = engine.connect()
@@ -36,8 +41,11 @@ class PersistenceTestCase(TestCase):
         # bind an individual Session to the connection
         self.session = self.Session(bind=self.connection)
 
-        metadata.bind = engine
-        metadata.create_all(checkfirst=True)
+        metadata.bind = self.connection
+
+        if in_memory:
+            # Only create_all for in_memory
+            metadata.create_all(checkfirst=True)
 
     def tearDown(self):
     # rollback - everything that happened with the

@@ -59,3 +59,8 @@ Run tests:
 ```
 # nosetests infrastructure -d -v -s
 ```
+
+Options available:
+
+- `export SQLITE_ECHO=1` for more database engine verbosity
+- `export SQLITE_IN_MEMORY=1` to run tests on in-memory sqlite instance

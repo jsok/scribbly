@@ -1,9 +1,10 @@
 from nose.tools import raises
 from sqlalchemy.exc import IntegrityError
+from nose_alembic_attrib import alembic_attr
 
 from domain.tests.factories.customer import CustomerFactory, AddressFactory, ContactFactory
 
-from infrastructure.tests.persistence import PersistenceTestCase, minimum_revision_satisfied
+from infrastructure.tests.persistence import PersistenceTestCase
 from infrastructure.persistence.customer_repository import CustomerRepository
 
 
@@ -12,6 +13,7 @@ class CustomerRepositoryTestCase(PersistenceTestCase):
         super(CustomerRepositoryTestCase, self).setUp()
         self.repository = CustomerRepository(self.session)
 
+    @alembic_attr(minimum_revision="4b9a79b051c6")
     def test_add_customer(self):
         customer = CustomerFactory.build(name="Customer")
 
@@ -21,11 +23,12 @@ class CustomerRepositoryTestCase(PersistenceTestCase):
         self.assertIsNotNone(c)
         self.assertEquals("Customer", c.name)
 
+    @alembic_attr(minimum_revision="4b9a79b051c6")
     def test_rollback_performed(self):
         c = self.repository.find("Customer")
         self.assertIsNone(c)
 
-    @minimum_revision_satisfied("5aa2dfb6e6a8")
+    @alembic_attr(minimum_revision="5aa2dfb6e6a8")
     def test_add_address(self):
         customer = CustomerFactory.build(name="Customer")
         self.repository.store(customer)
@@ -46,6 +49,7 @@ class CustomerRepositoryTestCase(PersistenceTestCase):
         self.assertEquals(1, len(a), "Customer should only have 1 shipping addresses")
         self.assertEqual(shipping_address, a[0], "Shipping addresses don't match")
 
+    @alembic_attr(minimum_revision="3830063c1b00")
     def test_add_contact(self):
         customer = CustomerFactory.build(name="Customer")
         self.repository.store(customer)
@@ -55,6 +59,7 @@ class CustomerRepositoryTestCase(PersistenceTestCase):
         contact.add_phone("OFFICE", "+6129000000")
         customer.add_contact(contact)
 
+    @alembic_attr(minimum_revision="3830063c1b00")
     @raises(IntegrityError)
     def test_add_contact_role_non_enum(self):
         customer = CustomerFactory.build(name="Customer")
@@ -64,6 +69,8 @@ class CustomerRepositoryTestCase(PersistenceTestCase):
         customer.add_contact(contact)
         self.repository.store(customer)
 
+
+    @alembic_attr(minimum_revision="3830063c1b00")
     @raises(IntegrityError)
     def test_add_contact_phone_non_enum(self):
         customer = CustomerFactory.build(name="Customer")

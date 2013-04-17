@@ -5,12 +5,14 @@ from nose.tools import raises
 
 from domain.tests.factories.product import ProductFactory, PriceValueFactory, ProductCollectionFactory
 
+
 class ProductTestCase(TestCase):
 
     def test_product_creation(self):
         p = ProductFactory.build()
 
         self.assertIsNotNone(p.sku, "Product was created without an SKU")
+
 
 class ProductPriceTestCase(TestCase):
 
@@ -48,6 +50,7 @@ class ProductPriceTestCase(TestCase):
 
         self.assertIsNone(p.get_price(date=now - datetime.timedelta(weeks=2)), "Price 2 weeks ago no undefined")
 
+
 class ProductCollectionTestCase(TestCase):
 
     def test_product_collection_empty(self):
@@ -73,14 +76,12 @@ class ProductCollectionTestCase(TestCase):
         collection = ProductCollectionFactory.build(name="PROD000 Variants")
         map(lambda p: p.join_collection(collection), products)
 
-        self.assertEquals(3, len(collection), "Incorrect number of products in collection")
         self.assertIsNone(collection.master, "Collection master should not be set")
 
         for p in products:
             self.assertEquals(1, len(p.collections), "%s is not aware it's in a collection" % p.sku)
 
         products[0].leave_collection(collection)
-        self.assertEquals(2, len(collection), "Incorrect number of products in collection")
         self.assertEquals(0, len(products[0].collections), "PROD000-A did not leave collection")
 
     def test_product_collection_replacement_group(self):
@@ -94,11 +95,11 @@ class ProductCollectionTestCase(TestCase):
         master.set_as_master_of_collection(collection)
         map(lambda p: p.join_collection(collection), replacements)
 
-        self.assertEquals(2, len(collection), "Incorrect number of products in collection")
         self.assertIsNotNone(collection.master, "Collection master should not be set")
 
         for p in replacements:
             self.assertEquals(1, len(p.collections), "%s is not aware it's in a collection" % p.sku)
+
 
 class ProductFlagsTestCase(TestCase):
 
@@ -106,11 +107,11 @@ class ProductFlagsTestCase(TestCase):
         p = ProductFactory.build()
 
         p.set_flag("Sale", True)
-        p.set_flag("Hot", 1)
+        p.set_flag("Hot", False)
 
         self.assertTrue(p.get_flag("Sale"), "Sale flag was not set")
-        self.assertTrue(p.get_flag("Hot"), "Hot flag was not set")
+        self.assertFalse(p.get_flag("Hot"), "Hot flag was not set disabled")
         self.assertFalse(p.get_flag("Deprecated"), "Deprecated flag should not be set")
 
-        p.set_flag("Hot", False)
-        self.assertFalse(p.get_flag("Hot"), "Hot flag was not cleared")
+        p.set_flag("Hot", True)
+        self.assertTrue(p.get_flag("Hot"), "Hot flag was not set")

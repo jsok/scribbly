@@ -5,6 +5,8 @@ from domain.shared.historical_value import HistoricalValueCollection
 
 from domain.model.product.price_value import PriceValue
 from domain.model.product.product_collection import ProductCollection
+from domain.model.product.product_flag import ProductFlag
+
 
 class Product(Entity):
     def __init__(self, sku, name, price, price_category=None):
@@ -40,16 +42,27 @@ class Product(Entity):
 
     def join_collection(self, collection):
         if isinstance(collection, ProductCollection):
-            if collection.add_product(self.sku):
-                self.collections.append(collection)
+            self.collections.append(collection)
+        else:
+            collection = ProductCollection(collection)
+            self.collections.append(collection)
 
     def leave_collection(self, collection):
         if isinstance(collection, ProductCollection):
-            if collection.remove_product(self.sku):
-                self.collections.remove(collection)
+            collection = collection.name
 
-    def set_flag(self, name, value):
-        self.flags[name] = True if value else False
+        for c in self.collections:
+            if c.name == collection:
+                self.collections.remove(c)
+
+    def set_flag(self, name, enabled):
+        if self.flags.get(name):
+            self.flags[name].set_flag(enabled)
+        else:
+            self.flags[name] = ProductFlag(name, enabled)
 
     def get_flag(self, name):
-        return self.flags.get(name, False)
+        if self.flags.get(name):
+            return self.flags.get(name).get_flag()
+        else:
+            return False

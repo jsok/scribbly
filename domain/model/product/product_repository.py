@@ -1,7 +1,7 @@
 from domain.model.product.product import Product as ProductEntity
 from domain.shared.repository import Repository
-from pricing.models import ProductPriceCategory
-from product.models import Product as ProductModel, Product
+from domain.pricing.models import ProductPriceCategory
+from domain.product.models import Product as ProductModel, Product
 
 class ProductRepository(Repository):
     def create(self, entity):

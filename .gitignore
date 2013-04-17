@@ -1,4 +1,5 @@
 *.pyc
+infrastructure/db/*.db
 virtualenv/*
 .coverage
 cover/*

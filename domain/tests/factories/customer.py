@@ -5,6 +5,7 @@ from domain.model.customer import customer, contact, address
 
 class CustomerFactory(factory.Factory):
     FACTORY_FOR = customer.Customer
+    FACTORY_STRATEGY = 'build'
 
     name = "Customer Name"
     discount_tier = "GRADE-A"
@@ -13,6 +14,7 @@ class CustomerFactory(factory.Factory):
 
 class ContactFactory(factory.Factory):
     FACTORY_FOR = contact.Contact
+    FACTORY_STRATEGY = 'build'
 
     firstname = "First"
     lastname = "Last"
@@ -21,6 +23,7 @@ class ContactFactory(factory.Factory):
 
 class AddressFactory(factory.Factory):
     FACTORY_FOR = address.Address
+    FACTORY_STRATEGY = 'build'
 
     line1 = "Unit 1"
     line2 = "2 Street St"

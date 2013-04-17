@@ -69,7 +69,6 @@ class CustomerRepositoryTestCase(PersistenceTestCase):
         customer.add_contact(contact)
         self.repository.store(customer)
 
-
     @alembic_attr(minimum_revision="3830063c1b00")
     @raises(IntegrityError)
     def test_add_contact_phone_non_enum(self):

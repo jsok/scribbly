@@ -1,6 +1,16 @@
 Scribbly ERP
 ============
 
+Overview
+---------
+
+This project is an exercise in:
+ - Domain Driven Design
+ - Test Driven Development
+ - Pythonic packages and modules
+ - SQLAlchemy and Alembic integration
+
+
 Installation
 ------------
 
@@ -17,8 +27,6 @@ Install requirements:
 
 Domain
 ------
-
-Scribbly ERP follows domain driven design and test driven design principles.
 
 ### Entities ###
 
